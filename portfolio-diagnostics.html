@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Diagnostics — Error Scanner</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --accent: #6c8aff;
+    --accent2: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --green: #34d399;
+    --blue: #60a5fa;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header .icon { font-size: 32px; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── DROP ZONE ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface);
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: #1e2236;
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-zone .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-zone h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .drop-zone p { color: var(--muted); font-size: 13px; }
+  .drop-zone .hint { margin-top: 10px; font-size: 11px; color: #5a6380; }
+
+  /* ── URL INPUT ── */
+  .url-row {
+    display: flex; gap: 10px; margin-top: 16px;
+  }
+  .url-row input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 10px 14px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .url-row input:focus { border-color: var(--accent); }
+  .url-row input::placeholder { color: #4a5370; }
+  .url-row button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .url-row button:hover { opacity: 0.85; }
+
+  /* ── MULTI-FILE QUEUE ── */
+  .queue {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .queue-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    gap: 12px;
+  }
+  .queue-item .fname { flex: 1; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue-item .fsize { color: var(--muted); font-size: 11px; }
+  .queue-item .remove-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
+    padding: 2px 4px; border-radius: 4px;
+  }
+  .queue-item .remove-btn:hover { color: var(--red); background: #2a1a1a; }
+
+  /* ── SCAN BUTTON ── */
+  #scanBtn {
+    display: none;
+    margin-top: 20px;
+    width: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.2s;
+  }
+  #scanBtn:hover { opacity: 0.9; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex; align-items: center; gap: 12px; margin: 28px 0;
+    color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── RESULTS ── */
+  #results { margin-top: 32px; display: flex; flex-direction: column; gap: 24px; }
+
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .result-card-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .result-card-header .file-name {
+    font-size: 15px; font-weight: 700; flex: 1;
+    min-width: 180px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-pass  { background: #0e2a1e; color: var(--green); border: 1px solid #1e4a36; }
+  .badge-warn  { background: #2a2210; color: var(--yellow); border: 1px solid #4a3a18; }
+  .badge-fail  { background: #2a1010; color: var(--red); border: 1px solid #5a2020; }
+  .badge-info  { background: #0e1a2e; color: var(--blue); border: 1px solid #1e3a5e; }
+
+  .result-summary {
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .result-summary strong { color: var(--text); }
+
+  .checks-list { padding: 4px 0; }
+  .check-row {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid #1e2135;
+    transition: background 0.15s;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row:hover { background: #1e2135; }
+
+  .check-icon { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .check-body { flex: 1; min-width: 0; }
+  .check-title { font-weight: 600; font-size: 13px; color: var(--text); }
+  .check-detail {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .check-detail code {
+    background: #0a0d16;
+    border: 1px solid #2a3050;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    color: #a5b4fc;
+    word-break: break-all;
+  }
+  .check-fix {
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #0a1525;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    font-size: 11px;
+    color: var(--blue);
+    line-height: 1.6;
+  }
+  .check-fix code { color: #93c5fd; background: #0d1f3a; border-color: #1e3a5e; }
+
+  .severity-error   .check-icon { color: var(--red); }
+  .severity-warning .check-icon { color: var(--yellow); }
+  .severity-pass    .check-icon { color: var(--green); }
+  .severity-info    .check-icon { color: var(--blue); }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center; padding: 48px 24px; color: var(--muted);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  /* ── SCROLL TO TOP ── */
+  #scrollTop {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 50%; width: 40px; height: 40px;
+    font-size: 18px; cursor: pointer; opacity: 0; transition: opacity 0.3s;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(108,138,255,0.4);
+  }
+  #scrollTop.visible { opacity: 1; }
+
+  @media (max-width: 600px) {
+    header { padding: 16px; }
+    .container { padding: 16px; }
+    .drop-zone { padding: 32px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="icon">🔍</div>
+  <div>
+    <h1>Portfolio Diagnostics</h1>
+    <p>Upload student .html files to scan for common errors</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".html,.htm" multiple>
+    <div class="drop-icon">📂</div>
+    <h2>Drop student HTML files here</h2>
+    <p>Or click to browse — you can upload multiple files at once</p>
+    <div class="hint">Accepts .html and .htm files</div>
+  </div>
+
+  <!-- File Queue -->
+  <div class="queue" id="queue"></div>
+
+  <!-- Scan Button -->
+  <button id="scanBtn" onclick="scanAll()">🔬 Scan All Files</button>
+
+  <div class="divider">or scan by URL</div>
+
+  <!-- URL Input -->
+  <div class="url-row">
+    <input type="text" id="urlInput" placeholder="https://student-name.netlify.app  or paste a direct URL to an .html file">
+    <button onclick="scanUrl()">Scan URL</button>
+  </div>
+
+  <!-- Results -->
+  <div id="results"></div>
+
+</div>
+
+<button id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CONFIGURATION — known error patterns
+// ═══════════════════════════════════════════════════════════
+
+const THIN_FONTS = [
+  'Italianno','MonteCarlo','Parisienne','Pinyon Script','Great Vibes',
+  'Alex Brush','Meddon','Lovers Quarrel','Miss Fajardose','Qwitcher Grypen',
+  'Dawning of a New Day','Dr Sugiyama','Felipa','Herr Von Muellerhoff',
+  'Meie Script','Monsieur La Doulaise','Niconne','Princess Sofia',
+  'Rochester','Ruthie','Sail','Sevillana','Yellowtail','Yesteryear',
+  'Clicker Script','Dancing Script','Sacramento','Allura','Aguafina Script',
+  'Bilbo Swash Caps','Bilbo','Cookie','Courgette','Engagement','Euphoria Script',
+  'Fleur De Leah','Give You Glory','Kaushan Script','Kursive','Lobster',
+  'Petit Formal Script','Playfair Display SC','Rouge Script','Sofia','Tangerine',
+  'The Girl Next Door','Vibes','Whisper'
+];
+
+const KNOWN_PARTICLE_STYLES = ['sparkles','snow','stars','confetti','bubbles','fireflies','fireworks','links','triangles','circles','dots'];
+
+const SWIPER_CSS_PATTERNS = ['swiper-bundle.min.css', 'swiper/11', 'swiper@11', 'swiper-bundle'];
+const SWIPER_JS_PATTERNS  = ['swiper-bundle.min.js', 'swiper/11/swiper-bundle', 'swiper@11'];
+const TSPARTICLES_PATTERNS = ['tsparticles', 'cdn.jsdelivr.net/npm/tsparticles', 'cdnjs.cloudflare.com/ajax/libs/tsParticles'];
+const AOS_CSS_PATTERNS = ['aos.css','aos/2','AOS'];
+const AOS_JS_PATTERNS  = ['aos.js','aos.umd','AOS'];
+
+const PLACEHOLDER_PATTERNS = [
+  { pattern: /Content for New div Tag Goes Here/i,
+    title: 'Dreamweaver placeholder div found',
+    detail: 'A stray <code>&lt;div&gt;Content for New div Tag Goes Here&lt;/div&gt;</code> was left inside the HTML — likely inside the nav bar.',
+    fix: 'Find and delete the entire <code>&lt;div&gt;Content for New div Tag Goes Here&lt;/div&gt;</code> line.' },
+  { pattern: /class\s*=\s*["']jpg["']/i,
+    title: 'Wrong CSS class: <code>class="jpg"</code>',
+    detail: 'An image is using <code>class="jpg"</code> instead of the correct <code>class="about-img"</code>.',
+    fix: 'Change <code>class="jpg"</code> → <code>class="about-img"</code> on the about section image.' },
+  { pattern: /Your Name Here/i,
+    title: 'Default name "Your Name Here" not updated',
+    detail: 'The student left the default placeholder name in the template.',
+    fix: 'Replace all instances of "Your Name Here" with the student\'s actual name.' },
+  { pattern: /Period\s*(?:0[0-9]|XX|__)/i,
+    title: 'Possible default period placeholder',
+    detail: 'Looks like a period placeholder (e.g. "Period 0X") may not have been updated.',
+    fix: 'Update the period value to the correct class period.' },
+  { pattern: /student[-_\s]?id\s*[:=]\s*["']?[0-9Xx]{5,}/i,
+    title: 'Student ID may still be a placeholder',
+    detail: 'The student ID field looks like it may contain template default text.',
+    fix: 'Make sure the student has filled in their actual student ID.' },
+  { pattern: /Your tagline goes here|tagline goes here/i,
+    title: 'Default tagline not updated',
+    detail: 'The tagline text in the hero section was never changed from the template default.',
+    fix: 'Replace the tagline placeholder with the student\'s own words.' },
+  { pattern: /Add your bio here|Write your bio here|Your bio goes here/i,
+    title: 'Default bio text not updated',
+    detail: 'The about section bio still contains placeholder text.',
+    fix: 'Replace the placeholder bio with the student\'s written bio.' },
+];
+
+// ═══════════════════════════════════════════════════════════
+//  FILE QUEUE MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+let fileQueue = [];
+
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('fileInput');
+const queueEl    = document.getElementById('queue');
+const scanBtn    = document.getElementById('scanBtn');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  addFiles([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value=''; });
+
+function addFiles(files) {
+  const html = files.filter(f => f.name.match(/\.html?$/i));
+  html.forEach(f => {
+    if (!fileQueue.find(q => q.name === f.name && q.size === f.size)) {
+      fileQueue.push(f);
+    }
+  });
+  renderQueue();
+}
+
+function removeFile(idx) {
+  fileQueue.splice(idx, 1);
+  renderQueue();
+}
+
+function renderQueue() {
+  if (fileQueue.length === 0) {
+    queueEl.innerHTML = '';
+    scanBtn.style.display = 'none';
+    return;
+  }
+  scanBtn.style.display = 'block';
+  queueEl.innerHTML = fileQueue.map((f, i) => `
+    <div class="queue-item">
+      <span class="check-icon">📄</span>
+      <span class="fname">${escHtml(f.name)}</span>
+      <span class="fsize">${formatBytes(f.size)}</span>
+      <button class="remove-btn" onclick="removeFile(${i})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN SCAN ENTRY POINTS
+// ═══════════════════════════════════════════════════════════
+
+async function scanAll() {
+  const resultsEl = document.getElementById('results');
+  resultsEl.innerHTML = '';
+
+  scanBtn.textContent = '⏳ Scanning…';
+  scanBtn.disabled = true;
+
+  for (const file of fileQueue) {
+    const text = await readFile(file);
+    const card = buildResultCard(file.name, text);
+    resultsEl.appendChild(card);
+  }
+
+  scanBtn.textContent = '🔬 Scan All Files';
+  scanBtn.disabled = false;
+
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function scanUrl() {
+  const input = document.getElementById('urlInput');
+  const url = input.value.trim();
+  if (!url) return alert('Please enter a URL first.');
+
+  const resultsEl = document.getElementById('results');
+  const placeholder = document.createElement('div');
+  placeholder.className = 'result-card';
+  placeholder.innerHTML = `<div class="result-card-header"><span class="file-name">⏳ Fetching ${escHtml(url)}…</span></div>`;
+  resultsEl.insertBefore(placeholder, resultsEl.firstChild);
+
+  try {
+    // Use a CORS proxy for external URLs
+    let fetchUrl = url;
+    let text;
+    try {
+      const resp = await fetch(fetchUrl, { mode: 'cors' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      text = await resp.text();
+    } catch(e) {
+      // Try corsproxy.io
+      const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+      const resp2 = await fetch(proxy);
+      if (!resp2.ok) throw new Error('Could not fetch via proxy');
+      text = await resp2.text();
+    }
+    const name = url.split('/').pop() || url;
+    const card = buildResultCard(name, text, url);
+    placeholder.replaceWith(card);
+  } catch(e) {
+    placeholder.innerHTML = `
+      <div class="result-card-header">
+        <span class="file-name">❌ ${escHtml(url)}</span>
+        <span class="badge badge-fail">Fetch Error</span>
+      </div>
+      <div class="result-summary">Could not fetch the URL. CORS may be blocking the request. Try downloading the file and uploading it instead.<br><small style="color:#f87171">${escHtml(e.message)}</small></div>
+    `;
+  }
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DIAGNOSTIC ENGINE
+// ═══════════════════════════════════════════════════════════
+
+function buildResultCard(filename, html, sourceUrl) {
+  const checks = runChecks(html, filename);
+
+  const errors   = checks.filter(c => c.severity === 'error');
+  const warnings = checks.filter(c => c.severity === 'warning');
+  const passes   = checks.filter(c => c.severity === 'pass');
+
+  let badgeHtml;
+  if (errors.length > 0) {
+    badgeHtml = `<span class="badge badge-fail">⛔ ${errors.length} Error${errors.length>1?'s':''}</span>`;
+  } else if (warnings.length > 0) {
+    badgeHtml = `<span class="badge badge-warn">⚠️ ${warnings.length} Warning${warnings.length>1?'s':''}</span>`;
+  } else {
+    badgeHtml = `<span class="badge badge-pass">✅ All Clear</span>`;
+  }
+
+  if (warnings.length > 0 && errors.length > 0) {
+    badgeHtml += ` <span class="badge badge-warn">⚠️ ${warnings.length} Warning${warnings.length>1?'s':''}</span>`;
+  }
+
+  const passCount = passes.length;
+  const totalChecks = checks.filter(c => c.severity !== 'info').length;
+
+  const summary = errors.length + warnings.length === 0
+    ? `All <strong>${totalChecks}</strong> checks passed — no issues detected.`
+    : `Found <strong style="color:var(--red)">${errors.length} error${errors.length!==1?'s':''}</strong> and <strong style="color:var(--yellow)">${warnings.length} warning${warnings.length!==1?'s':''}</strong> out of ${totalChecks} checks. <strong style="color:var(--green)">${passCount} passed.</strong>`;
+
+  // Separate into categories for display
+  const ordered = [
+    ...checks.filter(c=>c.severity==='error'),
+    ...checks.filter(c=>c.severity==='warning'),
+    ...checks.filter(c=>c.severity==='pass'),
+    ...checks.filter(c=>c.severity==='info'),
+  ];
+
+  const rows = ordered.map(c => {
+    const icons = { error: '⛔', warning: '⚠️', pass: '✅', info: 'ℹ️' };
+    const fixHtml = c.fix ? `<div class="check-fix">💡 <strong>Fix:</strong> ${c.fix}</div>` : '';
+    return `
+      <div class="check-row severity-${c.severity}">
+        <span class="check-icon">${icons[c.severity]}</span>
+        <div class="check-body">
+          <div class="check-title">${c.title}</div>
+          ${c.detail ? `<div class="check-detail">${c.detail}</div>` : ''}
+          ${fixHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const urlLink = sourceUrl ? ` <a href="${escHtml(sourceUrl)}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none;">↗ open</a>` : '';
+
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.innerHTML = `
+    <div class="result-card-header">
+      <span class="file-name">📄 ${escHtml(filename)}${urlLink}</span>
+      ${badgeHtml}
+    </div>
+    <div class="result-summary">${summary}</div>
+    <div class="checks-list">${rows}</div>
+  `;
+  return card;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INDIVIDUAL CHECKS
+// ═══════════════════════════════════════════════════════════
+
+function runChecks(html, filename) {
+  const results = [];
+
+  // Helper
+  const add = (severity, title, detail='', fix='') =>
+    results.push({ severity, title, detail, fix });
+
+  const has = pattern => (typeof pattern === 'string')
+    ? html.includes(pattern)
+    : pattern.test(html);
+
+  // ── 1. SWIPER CSS ──────────────────────────────────────────
+  const hasSwiperCSS = SWIPER_CSS_PATTERNS.some(p => html.includes(p));
+  const hasSwiperLink = /<link[^>]+swiper/i.test(html);
+  const hasSwiperRef = html.includes('swiper') || html.includes('Swiper');
+
+  if (hasSwiperRef && !hasSwiperCSS) {
+    add('error',
+      'Missing Swiper CSS stylesheet',
+      'Swiper.js is referenced in this file but the <code>&lt;link&gt;</code> tag for <code>swiper-bundle.min.css</code> is missing. Without it, the coverflow gallery is invisible (3D transforms overflow the container) and the cards gallery collapses into a vertical list.',
+      `Add this before your <code>&lt;/head&gt;</code> tag:<br><code>&lt;link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"&gt;</code>`
+    );
+  } else if (hasSwiperCSS) {
+    add('pass', 'Swiper CSS stylesheet present');
+  }
+
+  // ── 2. SWIPER JS ──────────────────────────────────────────
+  const hasSwiperJS = SWIPER_JS_PATTERNS.some(p => html.includes(p));
+  if (hasSwiperRef && !hasSwiperJS) {
+    add('error',
+      'Missing Swiper JS script',
+      'Swiper is used on this page but the <code>swiper-bundle.min.js</code> script tag appears to be missing.',
+      `Add this before your <code>&lt;/body&gt;</code> tag:<br><code>&lt;script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"&gt;&lt;/script&gt;</code>`
+    );
+  } else if (hasSwiperJS) {
+    add('pass', 'Swiper JS script present');
+  }
+
+  // ── 3. TSPARTICLES ────────────────────────────────────────
+  const hasParticles = TSPARTICLES_PATTERNS.some(p => html.includes(p));
+  const usesParticleInit = /tsParticles\.load|particlesJS|loadFull/i.test(html);
+
+  if (usesParticleInit && !hasParticles) {
+    add('error',
+      'Missing tsParticles CDN script',
+      'The page calls <code>tsParticles.load()</code> but no tsParticles library script tag was found.',
+      `Add the CDN link:<br><code>&lt;script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"&gt;&lt;/script&gt;</code>`
+    );
+  } else if (hasParticles) {
+    add('pass', 'tsParticles CDN script present');
+  }
+
+  // ── 4. PARTICLE COLOR VALIDITY ────────────────────────────
+  const colorMatch = html.match(/const\s+particleColor\s*=\s*['"]([^'"]+)['"]/);
+  if (colorMatch) {
+    const val = colorMatch[1];
+    const isValidHex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(val);
+    const isValidNamed = /^[a-zA-Z]+$/.test(val);
+    const isValidRgb = /^rgba?\(/.test(val);
+    if (!isValidHex && !isValidNamed && !isValidRgb) {
+      add('error',
+        'Invalid particleColor value',
+        `The value <code>particleColor = '${escHtml(val)}'</code> is not a valid color. tsParticles will silently fail and show no particles.`,
+        `Fix the hex value — e.g. change <code>'${escHtml(val)}'</code> to <code>'#FFFFFF'</code> (remove any stray characters after the 6 hex digits).`
+      );
+    } else {
+      add('pass', `particleColor is valid: <code>${escHtml(val)}</code>`);
+    }
+  }
+
+  // ── 5. PARTICLE STYLE VALIDITY ────────────────────────────
+  const styleMatch = html.match(/const\s+particleStyle\s*=\s*['"]([^'"]+)['"]/);
+  if (styleMatch) {
+    const pStyle = styleMatch[1].toLowerCase();
+    if (!KNOWN_PARTICLE_STYLES.includes(pStyle)) {
+      add('warning',
+        `Unrecognized particleStyle: "${escHtml(styleMatch[1])}"`,
+        `The particle style preset <code>'${escHtml(styleMatch[1])}'</code> is not in the list of known presets: ${KNOWN_PARTICLE_STYLES.map(s=>`<code>${s}</code>`).join(', ')}.`,
+        `Change <code>particleStyle</code> to one of the known presets listed above.`
+      );
+    } else {
+      add('pass', `particleStyle is a known preset: <code>${escHtml(styleMatch[1])}</code>`);
+    }
+  }
+
+  // ── 6. THIN / INVISIBLE FONT CHECK ────────────────────────
+  const fontBodyMatch    = html.match(/--font-body\s*:\s*['"]?([^;'"]+?)['"]?\s*[,;}/]/);
+  const fontHeadingMatch = html.match(/--font-heading\s*:\s*['"]?([^;'"]+?)['"]?\s*[,;}/]/);
+
+  [
+    { label: '--font-body',    match: fontBodyMatch },
+    { label: '--font-heading', match: fontHeadingMatch },
+  ].forEach(({ label, match }) => {
+    if (!match) return;
+    const fontStr = match[1].trim();
+    const foundThin = THIN_FONTS.find(f => fontStr.toLowerCase().includes(f.toLowerCase()));
+    if (foundThin) {
+      add('warning',
+        `Thin calligraphic font on <code>${label}</code>`,
+        `<code>${label}</code> is set to <code>${escHtml(fontStr)}</code>. Fonts like <strong>${escHtml(foundThin)}</strong> have hairline strokes that often render <strong>invisible on dark backgrounds</strong> at body-text sizes in Dreamweaver preview and some browsers.`,
+        `Either increase the font size significantly (e.g. 1.5rem+), set a contrasting text color, or switch to a more legible font like <code>Inter</code>, <code>Lato</code>, or <code>Raleway</code> for body text.`
+      );
+    } else {
+      add('pass', `${label} font appears legible: <code>${escHtml(fontStr)}</code>`);
+    }
+  });
+
+  // ── 7. PLACEHOLDER HTML ───────────────────────────────────
+  PLACEHOLDER_PATTERNS.forEach(p => {
+    if (p.pattern.test(html)) {
+      add('warning', p.title, p.detail, p.fix);
+    }
+  });
+
+  // ── 8. IMAGE PATHS WITH SPACES ───────────────────────────
+  const imgSrcMatches = [...html.matchAll(/src\s*=\s*["']([^"']+)["']/gi)];
+  const spacePaths = imgSrcMatches
+    .map(m => m[1])
+    .filter(src => !src.startsWith('http') && !src.startsWith('data:') && / /.test(src) && !/%20/.test(src));
+
+  if (spacePaths.length > 0) {
+    const examples = spacePaths.slice(0, 3).map(p => `<code>${escHtml(p)}</code>`).join(', ');
+    add('warning',
+      `Image path${spacePaths.length>1?'s have':' has'} unencoded spaces (${spacePaths.length} found)`,
+      `These paths contain spaces which can cause broken images: ${examples}${spacePaths.length > 3 ? ` <em>…and ${spacePaths.length-3} more</em>` : ''}.`,
+      `Either rename the folder to remove spaces (e.g. <code>landscape images/</code> → <code>landscape-images/</code>) or encode spaces as <code>%20</code> in all paths.`
+    );
+  }
+
+  // ── 9. AOS LIBRARY CHECK ──────────────────────────────────
+  const hasAosElements = /data-aos\s*=/.test(html);
+  const hasAosCSS = AOS_CSS_PATTERNS.some(p => html.includes(p));
+  const hasAosJS  = AOS_JS_PATTERNS.some(p => html.includes(p));
+  const hasAosInit = /AOS\.init/i.test(html);
+
+  if (hasAosElements) {
+    if (!hasAosCSS || !hasAosJS) {
+      add('error',
+        'AOS (Animate On Scroll) elements found but library may be missing',
+        `This page uses <code>data-aos</code> attributes but the AOS CSS${!hasAosCSS?' link':''} ${!hasAosCSS&&!hasAosJS?' and ':''} ${!hasAosJS?'script':''} may be missing. Missing AOS CSS causes all animated elements to stay hidden (<code>opacity:0</code>) permanently.`,
+        `Ensure both AOS CDN links are present:<br>
+          <code>&lt;link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet"&gt;</code><br>
+          <code>&lt;script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.umd.js"&gt;&lt;/script&gt;</code><br>
+          And call <code>AOS.init();</code> in your JavaScript.`
+      );
+    } else if (!hasAosInit) {
+      add('warning',
+        'AOS library loaded but AOS.init() not called',
+        'The AOS library is linked but <code>AOS.init()</code> was not found. Animated elements will stay invisible.',
+        'Add <code>AOS.init();</code> inside a <code>&lt;script&gt;</code> tag after the AOS script link.'
+      );
+    } else {
+      add('pass', 'AOS library and init() both detected');
+    }
+  }
+
+  // ── 10. UNCLOSED / MALFORMED TAGS ────────────────────────
+  // Check for unclosed <style> or <script> tags
+  const openStyle  = (html.match(/<style[^>]*>/gi) || []).length;
+  const closeStyle = (html.match(/<\/style>/gi) || []).length;
+  const openScript = (html.match(/<script[^>]*>/gi) || []).length;
+  const closeScript = (html.match(/<\/script>/gi) || []).length;
+
+  if (openStyle !== closeStyle) {
+    add('error',
+      `Mismatched &lt;style&gt; tags (${openStyle} open, ${closeStyle} close)`,
+      'The number of opening <code>&lt;style&gt;</code> and closing <code>&lt;/style&gt;</code> tags don\'t match. A missing closing tag will cause all remaining HTML to be treated as CSS.',
+      'Check the stylesheet block(s) and ensure every <code>&lt;style&gt;</code> has a matching <code>&lt;/style&gt;</code>.'
+    );
+  } else {
+    add('pass', `Style tag pairs balanced (${openStyle} open, ${closeStyle} close)`);
+  }
+
+  if (openScript !== closeScript) {
+    add('error',
+      `Mismatched &lt;script&gt; tags (${openScript} open, ${closeScript} close)`,
+      'The number of opening <code>&lt;script&gt;</code> and closing <code>&lt;/script&gt;</code> tags don\'t match.',
+      'Check all <code>&lt;script&gt;</code> blocks for missing closing tags.'
+    );
+  }
+
+  // ── 11. GOOGLE FONTS CHECK ────────────────────────────────
+  const usesGFonts = html.includes('fonts.googleapis.com');
+  const fontsInHtml = [...html.matchAll(/family=([A-Za-z+]+)/g)].map(m => m[1].replace(/\+/g,' '));
+  if (!usesGFonts && (fontBodyMatch || fontHeadingMatch)) {
+    const fontVals = [fontBodyMatch, fontHeadingMatch]
+      .filter(Boolean)
+      .map(m => m[1].replace(/['"]/g, '').split(',')[0].trim());
+    const usesNonSystem = fontVals.some(f => !['sans-serif','serif','monospace','cursive','fantasy','system-ui'].includes(f.toLowerCase()));
+    if (usesNonSystem) {
+      add('warning',
+        'CSS font variables set but no Google Fonts link found',
+        `The CSS uses custom font variables but no <code>fonts.googleapis.com</code> import was detected. If the fonts are not loaded, the browser will fall back to a generic font.`,
+        'Add a Google Fonts <code>&lt;link&gt;</code> for each font used, or use @import inside the CSS.'
+      );
+    }
+  } else if (usesGFonts) {
+    add('pass', `Google Fonts linked${fontsInHtml.length ? ': ' + fontsInHtml.map(f=>`<code>${escHtml(f)}</code>`).join(', ') : ''}`);
+  }
+
+  // ── 12. NETLIFY / PUBLISH CHECK ───────────────────────────
+  const hasNetlifyUrl = /netlify\.app/i.test(html);
+  if (hasNetlifyUrl) {
+    add('info',
+      'Netlify URL found in file',
+      'A <code>netlify.app</code> URL was detected inside the HTML source.',
+      ''
+    );
+  }
+
+  // ── 13. CONTACT FORM CHECK ────────────────────────────────
+  const hasFormAction = /<form[^>]+action\s*=\s*["'][^"']+["']/i.test(html);
+  const hasFormspree = /formspree\.io|netlify\.com\/v2\/submissions|getform\.io/i.test(html);
+  const hasForm = /<form/i.test(html);
+
+  if (hasForm && !hasFormAction && !hasFormspree) {
+    add('warning',
+      'Contact form has no action URL',
+      'A <code>&lt;form&gt;</code> element was found with no <code>action</code> attribute or form handler service (Formspree, Netlify Forms, etc.). Submissions will not be delivered.',
+      'Add an <code>action</code> attribute pointing to a form service like Formspree: <code>&lt;form action="https://formspree.io/f/YOUR_ID" method="POST"&gt;</code>'
+    );
+  }
+
+  // ── 14. DOCTYPE CHECK ────────────────────────────────────
+  if (!html.trim().startsWith('<!DOCTYPE html') && !html.trim().startsWith('<!doctype html')) {
+    add('warning',
+      'Missing DOCTYPE declaration',
+      'The file does not begin with <code>&lt;!DOCTYPE html&gt;</code>. This can trigger quirks mode in browsers.',
+      'Add <code>&lt;!DOCTYPE html&gt;</code> as the very first line of the file.'
+    );
+  } else {
+    add('pass', 'DOCTYPE present');
+  }
+
+  // ── 15. META CHARSET ─────────────────────────────────────
+  if (!/<meta\s[^>]*charset/i.test(html)) {
+    add('warning',
+      'No meta charset declaration',
+      'Missing <code>&lt;meta charset="UTF-8"&gt;</code>. Special characters may display incorrectly.',
+      'Add <code>&lt;meta charset="UTF-8"&gt;</code> as the first tag inside <code>&lt;head&gt;</code>.'
+    );
+  }
+
+  // ── 16. HTML TAG BALANCE (STRUCTURAL CHECK) ──────────────
+  // Use DOMParser to catch missing closing tags on key elements
+  const blockTags = [
+    'div','section','article','aside','nav','header','footer','main',
+    'ul','ol','li','table','thead','tbody','tr','td','th',
+    'form','select','textarea','fieldset','details','summary',
+    'h1','h2','h3','h4','h5','h6',
+    'p','a','span','button','label','figure','figcaption',
+  ];
+  const tagMismatches = [];
+  blockTags.forEach(tag => {
+    const openCount  = (html.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length
+                     + (html.match(new RegExp(`<${tag}>`, 'gi')) || []).length;
+    const closeCount = (html.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
+    // Allow ±1 for tags browsers auto-close (li, p, tr, td, th, option)
+    const autoClose = ['li','p','tr','td','th','option','dt','dd'].includes(tag);
+    const diff = openCount - closeCount;
+    if (diff !== 0 && !(autoClose && diff > 0 && diff <= openCount * 0.5)) {
+      tagMismatches.push({ tag, open: openCount, close: closeCount, diff });
+    }
+  });
+  if (tagMismatches.length > 0) {
+    // Also run DOMParser to get the browser's own assessment
+    let parserNote = '';
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const parserErrors = doc.querySelectorAll('parsererror');
+      if (parserErrors.length > 0) parserNote = ' (browser parser also reported errors)';
+    } catch(e) {}
+
+    const rows = tagMismatches.slice(0, 8).map(m => {
+      const dir = m.diff > 0 ? `${m.diff} unclosed` : `${Math.abs(m.diff)} extra closing`;
+      return `<code>&lt;${m.tag}&gt;</code> — ${m.open} open / ${m.close} close (${dir})`;
+    }).join('<br>');
+    add('error',
+      `Mismatched HTML tags detected (${tagMismatches.length} element type${tagMismatches.length>1?'s':''})${parserNote}`,
+      `Tag open/close counts don't match for:<br>${rows}${tagMismatches.length>8?`<br><em>…and ${tagMismatches.length-8} more</em>`:''}`,
+      'Open the file in a browser DevTools console and look for any red HTML warnings in the Elements panel. Check for deleted closing tags or misplaced nesting.'
+    );
+  } else {
+    add('pass', 'HTML block-level tag counts appear balanced');
+  }
+
+  // ── 17. JAVASCRIPT BRACKET/QUOTE BALANCE ─────────────────
+  // Extract each inline <script> block and check bracket pairing
+  const scriptBlocks = [...html.matchAll(/<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi)];
+  const jsIssues = [];
+
+  scriptBlocks.forEach((match, idx) => {
+    const src = match[1];
+    if (!src.trim()) return;
+
+    // Strip string literals and comments to avoid counting brackets inside them
+    const stripped = src
+      .replace(/\/\/[^\n]*/g, '')                   // single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, '')             // block comments
+      .replace(/`(?:[^`\\]|\\.|\n)*`/g, '""')       // template literals
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""')           // double-quoted strings
+      .replace(/'(?:[^'\\]|\\.)*'/g, "''");          // single-quoted strings
+
+    const counts = { '{':0, '}':0, '(':0, ')':0, '[':0, ']':0 };
+    for (const ch of stripped) { if (ch in counts) counts[ch]++; }
+
+    const pairs = [
+      ['{','}','curly braces'],
+      ['(',')',  'parentheses'],
+      ['[',']',  'square brackets'],
+    ];
+    pairs.forEach(([o,c,name]) => {
+      if (counts[o] !== counts[c]) {
+        jsIssues.push({
+          block: idx+1,
+          name,
+          open: counts[o],
+          close: counts[c],
+          diff: counts[o] - counts[c]
+        });
+      }
+    });
+  });
+
+  if (jsIssues.length > 0) {
+    const rows = jsIssues.map(i => {
+      const dir = i.diff > 0 ? `${i.diff} unclosed` : `${Math.abs(i.diff)} extra closing`;
+      return `Script block ${i.block}: ${i.name} — ${i.open} open / ${i.close} close (${dir})`;
+    }).join('<br>');
+    add('error',
+      `JavaScript bracket mismatch in ${[...new Set(jsIssues.map(i=>i.block))].length} script block(s)`,
+      rows,
+      'Open your browser\'s DevTools console (F12) and look for <code>SyntaxError: Unexpected token</code> messages. Count matching <code>{}</code>, <code>()</code>, and <code>[]</code> pairs carefully.'
+    );
+  } else if (scriptBlocks.length > 0) {
+    add('pass', `JavaScript brackets balanced across ${scriptBlocks.length} inline script block${scriptBlocks.length>1?'s':''}`);
+  }
+
+  // ── 18. TYPO DETECTION ───────────────────────────────────
+  const TYPOS = [
+    // HTML attribute typos
+    { re: /\bhef\s*=/i,          correct: 'href=',     ctx: 'HTML attribute' },
+    { re: /\bhreff\s*=/i,        correct: 'href=',     ctx: 'HTML attribute' },
+    { re: /\bstlye\s*=/i,        correct: 'style=',    ctx: 'HTML attribute' },
+    { re: /\bstyel\s*=/i,        correct: 'style=',    ctx: 'HTML attribute' },
+    { re: /\bclaas\s*=/i,        correct: 'class=',    ctx: 'HTML attribute' },
+    { re: /\bclsas\s*=/i,        correct: 'class=',    ctx: 'HTML attribute' },
+    { re: /\btaregt\s*=/i,       correct: 'target=',   ctx: 'HTML attribute' },
+    { re: /\baciton\s*=/i,       correct: 'action=',   ctx: 'HTML attribute' },
+    { re: /\bactoin\s*=/i,       correct: 'action=',   ctx: 'HTML attribute' },
+    { re: /\bmehod\s*=/i,        correct: 'method=',   ctx: 'HTML attribute' },
+    { re: /\bmetohd\s*=/i,       correct: 'method=',   ctx: 'HTML attribute' },
+    { re: /\bsrcc\s*=/i,         correct: 'src=',      ctx: 'HTML attribute' },
+    { re: /\baltt\s*=/i,         correct: 'alt=',      ctx: 'HTML attribute' },
+    { re: /\bplaceholdr\s*=/i,   correct: 'placeholder=', ctx: 'HTML attribute' },
+    // CSS property typos
+    { re: /backgorund\s*:/i,     correct: 'background:', ctx: 'CSS property' },
+    { re: /backgroud\s*:/i,      correct: 'background:', ctx: 'CSS property' },
+    { re: /backgrund\s*:/i,      correct: 'background:', ctx: 'CSS property' },
+    { re: /margni\s*:/i,         correct: 'margin:',    ctx: 'CSS property' },
+    { re: /maring\s*:/i,         correct: 'margin:',    ctx: 'CSS property' },
+    { re: /padidng\s*:/i,        correct: 'padding:',   ctx: 'CSS property' },
+    { re: /paddng\s*:/i,         correct: 'padding:',   ctx: 'CSS property' },
+    { re: /\bcolro\s*:/i,        correct: 'color:',     ctx: 'CSS property' },
+    { re: /\bcloor\s*:/i,        correct: 'color:',     ctx: 'CSS property' },
+    { re: /dispaly\s*:/i,        correct: 'display:',   ctx: 'CSS property' },
+    { re: /disaply\s*:/i,        correct: 'display:',   ctx: 'CSS property' },
+    { re: /positoin\s*:/i,       correct: 'position:',  ctx: 'CSS property' },
+    { re: /positon\s*:/i,        correct: 'position:',  ctx: 'CSS property' },
+    { re: /\bbordre\s*:/i,       correct: 'border:',    ctx: 'CSS property' },
+    { re: /\bbroder\s*:/i,       correct: 'border:',    ctx: 'CSS property' },
+    { re: /boder-radius\s*:/i,   correct: 'border-radius:', ctx: 'CSS property' },
+    { re: /border-raduis\s*:/i,  correct: 'border-radius:', ctx: 'CSS property' },
+    { re: /\bwidht\s*:/i,        correct: 'width:',     ctx: 'CSS property' },
+    { re: /\bwdith\s*:/i,        correct: 'width:',     ctx: 'CSS property' },
+    { re: /\bhegiht\s*:/i,       correct: 'height:',    ctx: 'CSS property' },
+    { re: /\bhieght\s*:/i,       correct: 'height:',    ctx: 'CSS property' },
+    { re: /\bheigh\s*:/i,        correct: 'height:',    ctx: 'CSS property' },
+    { re: /opcaity\s*:/i,        correct: 'opacity:',   ctx: 'CSS property' },
+    { re: /opactiy\s*:/i,        correct: 'opacity:',   ctx: 'CSS property' },
+    { re: /trasnsform\s*:/i,     correct: 'transform:',  ctx: 'CSS property' },
+    { re: /transfomr\s*:/i,      correct: 'transform:',  ctx: 'CSS property' },
+    { re: /transistion\s*:/i,    correct: 'transition:', ctx: 'CSS property' },
+    { re: /transitoin\s*:/i,     correct: 'transition:', ctx: 'CSS property' },
+    { re: /aniamtion\s*:/i,      correct: 'animation:',  ctx: 'CSS property' },
+    { re: /animaiton\s*:/i,      correct: 'animation:',  ctx: 'CSS property' },
+    { re: /overfow\s*:/i,        correct: 'overflow:',   ctx: 'CSS property' },
+    { re: /overlfow\s*:/i,       correct: 'overflow:',   ctx: 'CSS property' },
+    { re: /visbility\s*:/i,      correct: 'visibility:', ctx: 'CSS property' },
+    { re: /visibilty\s*:/i,      correct: 'visibility:', ctx: 'CSS property' },
+    { re: /\bcursro\s*:/i,       correct: 'cursor:',    ctx: 'CSS property' },
+    { re: /\bcurser\s*:/i,       correct: 'cursor:',    ctx: 'CSS property' },
+    { re: /z-idnex\s*:/i,        correct: 'z-index:',   ctx: 'CSS property' },
+    { re: /z-inedx\s*:/i,        correct: 'z-index:',   ctx: 'CSS property' },
+    { re: /font-weitgh\s*:/i,    correct: 'font-weight:', ctx: 'CSS property' },
+    { re: /font-wieght\s*:/i,    correct: 'font-weight:', ctx: 'CSS property' },
+    { re: /font-siez\s*:/i,      correct: 'font-size:',  ctx: 'CSS property' },
+    { re: /text-algin\s*:/i,     correct: 'text-align:', ctx: 'CSS property' },
+    { re: /text-aliagn\s*:/i,    correct: 'text-align:', ctx: 'CSS property' },
+    { re: /backgorund-color\s*:/i, correct: 'background-color:', ctx: 'CSS property' },
+    { re: /backgound-color\s*:/i,  correct: 'background-color:', ctx: 'CSS property' },
+    { re: /flota\s*:/i,          correct: 'float:',     ctx: 'CSS property' },
+    { re: /\bflaot\s*:/i,        correct: 'float:',     ctx: 'CSS property' },
+    { re: /lien-height\s*:/i,    correct: 'line-height:', ctx: 'CSS property' },
+    { re: /line-heigth\s*:/i,    correct: 'line-height:', ctx: 'CSS property' },
+    // JavaScript typos
+    { re: /\bdocumnet\b/,        correct: 'document',   ctx: 'JavaScript' },
+    { re: /\bdocuemnt\b/,        correct: 'document',   ctx: 'JavaScript' },
+    { re: /\bwindwo\b/,          correct: 'window',     ctx: 'JavaScript' },
+    { re: /\bwinodw\b/,          correct: 'window',     ctx: 'JavaScript' },
+    { re: /\bfunctoin\b/,        correct: 'function',   ctx: 'JavaScript' },
+    { re: /\bfuntion\b/,         correct: 'function',   ctx: 'JavaScript' },
+    { re: /\bfucntion\b/,        correct: 'function',   ctx: 'JavaScript' },
+    { re: /\bconsoole\b/,        correct: 'console',    ctx: 'JavaScript' },
+    { re: /\bconsoel\b/,         correct: 'console',    ctx: 'JavaScript' },
+    { re: /\bretrun\b/,          correct: 'return',     ctx: 'JavaScript' },
+    { re: /\bretunr\b/,          correct: 'return',     ctx: 'JavaScript' },
+    { re: /\breutrn\b/,          correct: 'return',     ctx: 'JavaScript' },
+    { re: /\blenght\b/,          correct: 'length',     ctx: 'JavaScript' },
+    { re: /\blegnth\b/,          correct: 'length',     ctx: 'JavaScript' },
+    { re: /\bquerySleector\b/,   correct: 'querySelector', ctx: 'JavaScript' },
+    { re: /\bquerySecltor\b/,    correct: 'querySelector', ctx: 'JavaScript' },
+    { re: /\baddEvnetListener\b/, correct: 'addEventListener', ctx: 'JavaScript' },
+    { re: /\baddEventListenr\b/,  correct: 'addEventListener', ctx: 'JavaScript' },
+    { re: /\bgetElemntById\b/,   correct: 'getElementById', ctx: 'JavaScript' },
+    { re: /\bgetElmentById\b/,   correct: 'getElementById', ctx: 'JavaScript' },
+    { re: /\binnerHtml\b/,       correct: 'innerHTML',  ctx: 'JavaScript (case-sensitive)' },
+    { re: /\bouterHtml\b/,       correct: 'outerHTML',  ctx: 'JavaScript (case-sensitive)' },
+    { re: /\.classlist\b/,       correct: '.classList', ctx: 'JavaScript (case-sensitive)' },
+    { re: /\.Classlist\b/,       correct: '.classList', ctx: 'JavaScript (case-sensitive)' },
+    { re: /\bpreventDefualt\b/,  correct: 'preventDefault', ctx: 'JavaScript' },
+    { re: /\bprevnetDefault\b/,  correct: 'preventDefault', ctx: 'JavaScript' },
+    { re: /\bsetTimeotu\b/,      correct: 'setTimeout',  ctx: 'JavaScript' },
+    { re: /\bsetInvterval\b/,    correct: 'setInterval', ctx: 'JavaScript' },
+    { re: /\bsetIntervla\b/,     correct: 'setInterval', ctx: 'JavaScript' },
+    { re: /\bNuLL\b/,            correct: 'null',        ctx: 'JavaScript (case-sensitive)' },
+    { re: /\bTRUE\b/,            correct: 'true',        ctx: 'JavaScript (case-sensitive)' },
+    { re: /\bFALSE\b/,           correct: 'false',       ctx: 'JavaScript (case-sensitive)' },
+    { re: /\bUndefined\b/,       correct: 'undefined',   ctx: 'JavaScript (case-sensitive)' },
+    // CSS value typos
+    { re: /:\s*noen\b/i,         correct: 'none',       ctx: 'CSS value' },
+    { re: /:\s*blcok\b/i,        correct: 'block',      ctx: 'CSS value' },
+    { re: /:\s*bolck\b/i,        correct: 'block',      ctx: 'CSS value' },
+    { re: /:\s*absoulte\b/i,     correct: 'absolute',   ctx: 'CSS value' },
+    { re: /:\s*absoloute\b/i,    correct: 'absolute',   ctx: 'CSS value' },
+    { re: /:\s*relatve\b/i,      correct: 'relative',   ctx: 'CSS value' },
+    { re: /:\s*fexed\b/i,        correct: 'fixed',      ctx: 'CSS value' },
+    { re: /:\s*flexbox\b/i,      correct: 'flex (not flexbox)', ctx: 'CSS value' },
+    { re: /:\s*centre\b/i,       correct: 'center',     ctx: 'CSS value (American spelling)' },
+    { re: /:\s*nowarp\b/i,       correct: 'nowrap',     ctx: 'CSS value' },
+    { re: /:\s*transaparent\b/i, correct: 'transparent', ctx: 'CSS value' },
+    { re: /:\s*tranparent\b/i,   correct: 'transparent', ctx: 'CSS value' },
+    { re: /:\s*iherit\b/i,       correct: 'inherit',    ctx: 'CSS value' },
+    { re: /:\s*intiial\b/i,      correct: 'initial',    ctx: 'CSS value' },
+    { re: /:\s*inital\b/i,       correct: 'initial',    ctx: 'CSS value' },
+  ];
+
+  const foundTypos = [];
+  TYPOS.forEach(({ re, correct, ctx }) => {
+    const match = html.match(re);
+    if (match) {
+      foundTypos.push({
+        found: match[0].replace(/\s/g,'&nbsp;'),
+        correct,
+        ctx
+      });
+    }
+  });
+
+  if (foundTypos.length > 0) {
+    // Group by context
+    const grouped = {};
+    foundTypos.forEach(t => {
+      if (!grouped[t.ctx]) grouped[t.ctx] = [];
+      grouped[t.ctx].push(t);
+    });
+    const rows = Object.entries(grouped).map(([ctx, items]) => {
+      const list = items.map(i =>
+        `<code>${i.found}</code> → should be <code>${escHtml(i.correct)}</code>`
+      ).join(', ');
+      return `<strong>${escHtml(ctx)}:</strong> ${list}`;
+    }).join('<br>');
+
+    add('warning',
+      `Possible typos detected (${foundTypos.length} instance${foundTypos.length>1?'s':''})`,
+      rows,
+      'Search for the flagged text in your code editor using Find (Ctrl+F / Cmd+F) and correct each typo.'
+    );
+  } else {
+    add('pass', 'No common HTML/CSS/JS typos detected');
+  }
+
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// Scroll-to-top visibility
+window.addEventListener('scroll', () => {
+  const btn = document.getElementById('scrollTop');
+  btn.classList.toggle('visible', window.scrollY > 400);
+});
+</script>
+</body>
+</html>
