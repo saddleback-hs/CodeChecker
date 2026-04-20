@@ -357,6 +357,22 @@
   }
   .pregrade-rubric-req strong { color: #505888; font-style: normal; }
 
+  .pregrade-fix {
+    margin-top: 6px;
+    padding: 7px 11px;
+    background: #0d1828;
+    border-left: 3px solid #6c8aff;
+    border-radius: 0 5px 5px 0;
+    font-size: 11px; color: #93c5fd; line-height: 1.65;
+  }
+  .pregrade-fix strong { color: #bfd4ff; }
+  .pregrade-fix code {
+    background: #0a1020; border: 1px solid #1e3060;
+    border-radius: 3px; padding: 1px 5px;
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 10px; color: #a5c0ff;
+  }
+
   /* ── LINE NUMBER BADGE ── */
   .line-badge {
     display: inline-flex; align-items: center;
@@ -954,7 +970,13 @@ function runChecks(html, filename) {
   }
 
   // ── 16. HTML TAG BALANCE (STRUCTURAL CHECK) ──────────────
-  // Use DOMParser to catch missing closing tags on key elements
+  // Strip <script> and <style> blocks FIRST — tags written inside JS strings
+  // (e.g. innerHTML = '<h3>Title</h3>') are not real DOM elements and would
+  // inflate the open-tag count, producing false mismatches for every portfolio.
+  const htmlForTags = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
+
   const blockTags = [
     'div','section','article','aside','nav','header','footer','main',
     'ul','ol','li','table','thead','tbody','tr','td','th',
@@ -964,9 +986,9 @@ function runChecks(html, filename) {
   ];
   const tagMismatches = [];
   blockTags.forEach(tag => {
-    const openCount  = (html.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length
-                     + (html.match(new RegExp(`<${tag}>`, 'gi')) || []).length;
-    const closeCount = (html.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
+    const openCount  = (htmlForTags.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length
+                     + (htmlForTags.match(new RegExp(`<${tag}>`, 'gi')) || []).length;
+    const closeCount = (htmlForTags.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
     // Allow ±1 for tags browsers auto-close (li, p, tr, td, th, option)
     const autoClose = ['li','p','tr','td','th','option','dt','dd'].includes(tag);
     const diff = openCount - closeCount;
@@ -1034,14 +1056,19 @@ function runChecks(html, filename) {
       ['[',']',  'square brackets'],
     ];
     pairs.forEach(([o,c,name]) => {
-      if (counts[o] !== counts[c]) {
+      const diff = counts[o] - counts[c];
+      // Require a difference of ≥2 before flagging. A single off-by-one (±1)
+      // is a known false positive caused by regex literals, certain template
+      // literal edge cases, or minified code that the stripper doesn't fully
+      // neutralise — it does NOT indicate a real syntax error in valid files.
+      if (Math.abs(diff) >= 2) {
         jsIssues.push({
           block: idx+1,
           startLine: scriptStartLines[idx] || null,
           name,
           open: counts[o],
           close: counts[c],
-          diff: counts[o] - counts[c]
+          diff
         });
       }
     });
@@ -1292,18 +1319,23 @@ function pg_gradeQuantity(doc) {
   const ba = doc.querySelectorAll('.ba-tab').length;
   const counts = `Landscape: ${ls} | Portrait: ${pt} | Before/After: ${ba}`;
   if (ls === 0 && pt === 0 && ba === 0)
-    return { score:0, label:'Not Attempted', notes:`No gallery content detected — all galleries appear empty. (${counts})` };
+    return { score:0, label:'Not Attempted',
+      notes:`No gallery content detected — all galleries appear empty. (${counts})`,
+      fix:`Make sure each image in your galleries is inside a <code>&lt;div class="swiper-slide"&gt;</code> element. The landscape gallery needs the id <code>gallery-landscape</code> and the portrait gallery needs <code>gallery-portrait</code>. Check that these sections exist in your HTML.` };
   const short = [];
-  if (ls < 3) short.push(`Landscape has ${ls} (min 3)`);
-  if (pt < 3) short.push(`Portrait has ${pt} (min 3)`);
-  if (ba < 3) short.push(`Before/After has ${ba} (min 3)`);
+  const fixParts = [];
+  if (ls < 3) { short.push(`Landscape has ${ls} (min 3)`); fixParts.push(`Add ${3-ls} more slide(s) to the <strong>Landscape gallery</strong> — find the section with <code>id="gallery-landscape"</code> and copy an existing <code>&lt;div class="swiper-slide"&gt;</code> block, then update the image and slide-info content.`); }
+  if (pt < 3) { short.push(`Portrait has ${pt} (min 3)`); fixParts.push(`Add ${3-pt} more slide(s) to the <strong>Portrait gallery</strong> (<code>id="gallery-portrait"</code>) the same way.`); }
+  if (ba < 3) { short.push(`Before/After has ${ba} (min 3)`); fixParts.push(`Add ${3-ba} more Before/After project(s) — find the Before/After section in your HTML and add a new tab button + content panel for each project.`); }
   if (short.length > 0)
-    return { score:4, label:'Developing', notes:`Below minimums: ${short.join('; ')}. (${counts})` };
+    return { score:4, label:'Developing', notes:`Below minimums: ${short.join('; ')}. (${counts})`, fix:fixParts.join(' ') };
   if (ls >= 4 && pt >= 4 && ba >= 4)
     return { score:10, label:'Excellent', notes:`All galleries meet or exceed minimums. (${counts})` };
   const atMin = [];
-  if (ls === 3) atMin.push(`Landscape (${ls})`); if (pt === 3) atMin.push(`Portrait (${pt})`); if (ba === 3) atMin.push(`B/A (${ba})`);
-  return { score:7, label:'Proficient', notes:`All at minimum — ${atMin.join(', ')} exactly at 3. Add a 4th entry to each for full marks. (${counts})` };
+  if (ls === 3) atMin.push(`Landscape`); if (pt === 3) atMin.push(`Portrait`); if (ba === 3) atMin.push(`Before/After`);
+  return { score:7, label:'Proficient',
+    notes:`All at minimum — ${atMin.join(', ')} exactly at 3. Add a 4th entry to each for full marks. (${counts})`,
+    fix:`For each gallery at exactly 3, add one more <code>&lt;div class="swiper-slide"&gt;</code> with a new image. For Before/After, add a 4th project tab. Duplicate an existing entry to keep the formatting correct, then replace the image and text.` };
 }
 
 function pg_gradeTextPersonalization(doc, html) {
@@ -1312,7 +1344,8 @@ function pg_gradeTextPersonalization(doc, html) {
   if (/class="nav-logo"[^>]*>\s*Your Name\s*</i.test(html)) issues.push('Nav logo still "Your Name"');
   if (/class="hero-name"[^>]*>[\s\S]{0,40}your[\s\S]{0,10}name/i.test(html)) issues.push('Hero heading still "Your Name"');
   if (/©\s*\d{4}\s*Your Name/i.test(html))                  issues.push('Footer still "Your Name"');
-  if (html.includes('youremail@school.edu'))                 issues.push('Email not updated');
+  // Only flag if default email still appears as visible text — not just in a mailto: href
+  if (/>youremail@school\.edu/i.test(html))                  issues.push('Contact email visible text not updated');
   if (html.includes(TMPL.tagline))                           issues.push('Hero tagline unchanged');
   if (html.includes(TMPL.bio1))                              issues.push('Bio paragraph 1 unchanged');
   if (html.includes(TMPL.bio2))                              issues.push('Bio paragraph 2 unchanged');
@@ -1326,11 +1359,23 @@ function pg_gradeTextPersonalization(doc, html) {
   if (idM     && idM[1]==='Student ID')     issues.push('Student ID not set');
   const nameDefault = /your\s*name\s*—\s*digital/i.test(html)||/class="nav-logo"[^>]*>\s*Your Name\s*</i.test(html);
   const bioDefault  = html.includes(TMPL.bio1) && html.includes(TMPL.bio2);
-  if (nameDefault && bioDefault && html.includes('youremail@school.edu'))
-    return { score:0, label:'Not Attempted', notes:'Name, bio, and email all unchanged from template.' };
+
+  // Build fix instructions specific to which fields are still at defaults
+  const fixLines = [];
+  if (issues.some(i => i.includes('Name')))         fixLines.push(`<strong>Name:</strong> Use Find &amp; Replace (Ctrl+H / Cmd+H) to replace every instance of <code>Your Name</code> with your actual name — check the page title, nav bar, hero heading, and footer.`);
+  if (issues.some(i => i.includes('email')))        fixLines.push(`<strong>Email:</strong> Find <code>youremail@school.edu</code> in your HTML and change it to your school email address (e.g. <code>12345@sausdlearns.net</code>).`);
+  if (issues.some(i => i.includes('tagline')))      fixLines.push(`<strong>Tagline:</strong> Find the hero tagline text and replace it with a short personal statement in your own words.`);
+  if (issues.some(i => i.includes('Bio')))          fixLines.push(`<strong>Bio:</strong> Find the About Me section (search for <code>class="about-text"</code>) and replace the placeholder paragraphs with your own writing about your artistic background and process.`);
+  if (issues.some(i => i.includes('Tool tags')))    fixLines.push(`<strong>Tool tags:</strong> Find the elements with <code>class="tool-tag"</code> and change them to the software tools you actually use.`);
+  if (issues.some(i => i.includes('Period')))       fixLines.push(`<strong>Period:</strong> Scroll to the bottom script block and find <code>const studentPeriod = 'Period #'</code> — replace <code>Period #</code> with your actual class period number.`);
+  if (issues.some(i => i.includes('Student ID')))   fixLines.push(`<strong>Student ID:</strong> In the same script block, find <code>const studentID = 'Student ID'</code> and replace <code>Student ID</code> with your school ID number.`);
+
+  if (nameDefault && bioDefault && />youremail@school\.edu/i.test(html))
+    return { score:0, label:'Not Attempted', notes:'Name, bio, and email all unchanged from template.',
+      fix:fixLines.join('<br>') || 'Use Find &amp; Replace (Ctrl+H) to update your name, email, and bio throughout the file.' };
   if (issues.length === 0) return { score:10, label:'Excellent',  notes:'All text fields updated and personalized.' };
-  if (issues.length <= 2)  return { score:7,  label:'Proficient', notes:`Minor issues: ${issues.join(' | ')}.` };
-  return                          { score:4,  label:'Developing', notes:`Several fields unchanged: ${issues.join(' | ')}.` };
+  if (issues.length <= 2)  return { score:7,  label:'Proficient', notes:`Minor issues: ${issues.join(' | ')}.`,  fix:fixLines.join('<br>') };
+  return                          { score:4,  label:'Developing', notes:`Several fields unchanged: ${issues.join(' | ')}.`, fix:fixLines.join('<br>') };
 }
 
 function pg_gradeWorkInformation(doc, html) {
@@ -1345,17 +1390,21 @@ function pg_gradeWorkInformation(doc, html) {
   TMPL.baTabs.forEach(t=>{ if(new RegExp(`>\\s*${t}\\s*<`).test(html)) defaultTabs++; });
   TMPL.baCaptions.forEach(c=>{ if(html.includes(c)) defaultCaps++; });
   const total = tmplTitles+tmplDescs+tmplVisTitles+tmplVisDescs+defaultTabs+defaultCaps;
-  if (tmplTitles>=5 && tmplDescs>=5) return { score:0, label:'Not Attempted', notes:`${tmplTitles}/6 slide titles and ${tmplDescs}/6 descriptions still match template defaults.` };
+  const workFix = [];
+  if (tmplTitles>=5 && tmplDescs>=5) {
+    return { score:0, label:'Not Attempted', notes:`${tmplTitles}/6 slide titles and ${tmplDescs}/6 descriptions still match template defaults.`,
+      fix:`For every slide in both your Landscape and Portrait galleries, update the <code>data-title="..."</code> and <code>data-desc="..."</code> attributes on the <code>&lt;div class="swiper-slide"&gt;</code> element, and replace the <code>&lt;h3&gt;</code> title and <code>&lt;p&gt;</code> description inside the <code>.slide-info</code> div with your own work's information.` };
+  }
   if (total===0) return { score:10, label:'Excellent', notes:'All slide titles, descriptions, and B/A labels fully personalized.' };
   const unchanged = [];
-  if (tmplTitles>0) unchanged.push(`${tmplTitles} slide data-title(s)`);
-  if (tmplDescs>0)  unchanged.push(`${tmplDescs} data-desc(s)`);
-  if (tmplVisTitles>0) unchanged.push(`${tmplVisTitles} visible title(s)`);
-  if (tmplVisDescs>0)  unchanged.push(`${tmplVisDescs} visible desc(s)`);
-  if (defaultTabs>0)   unchanged.push(`${defaultTabs} B/A tab label(s)`);
-  if (defaultCaps>0)   unchanged.push(`${defaultCaps} B/A caption(s)`);
-  if (total<=3) return { score:7, label:'Proficient', notes:`Minor items unchanged: ${unchanged.join(', ')}.` };
-  return          { score:4, label:'Developing', notes:`Several items still at defaults: ${unchanged.join(', ')}.` };
+  if (tmplTitles>0)    { unchanged.push(`${tmplTitles} slide data-title(s)`);    workFix.push(`Update the <code>data-title="..."</code> attribute on ${tmplTitles} slide(s) — search for template names like <code>Urban Reflections</code> or <code>Poster Campaign</code> and replace them.`); }
+  if (tmplDescs>0)     { unchanged.push(`${tmplDescs} data-desc(s)`);            workFix.push(`Update the <code>data-desc="..."</code> attribute on ${tmplDescs} slide(s) with your own description of the work.`); }
+  if (tmplVisTitles>0) { unchanged.push(`${tmplVisTitles} visible title(s)`);    workFix.push(`Inside the <code>.slide-info</code> div on ${tmplVisTitles} slide(s), change the <code>&lt;h3&gt;</code> text to your work's title.`); }
+  if (tmplVisDescs>0)  { unchanged.push(`${tmplVisDescs} visible desc(s)`);      workFix.push(`Change the <code>&lt;p&gt;</code> description text inside <code>.slide-info</code> on ${tmplVisDescs} slide(s).`); }
+  if (defaultTabs>0)   { unchanged.push(`${defaultTabs} B/A tab label(s)`);      workFix.push(`In the Before/After section, rename the tab buttons from "Project One/Two/Three" to your actual project names.`); }
+  if (defaultCaps>0)   { unchanged.push(`${defaultCaps} B/A caption(s)`);        workFix.push(`Find the Before/After captions in your script block (search for <code>describe what changed and why</code>) and replace each one with a real description of your edits.`); }
+  if (total<=3) return { score:7, label:'Proficient', notes:`Minor items unchanged: ${unchanged.join(', ')}.`, fix:workFix.join(' ') };
+  return          { score:4, label:'Developing', notes:`Several items still at defaults: ${unchanged.join(', ')}.`, fix:workFix.join(' ') };
 }
 
 function pg_gradeGrammar(doc, html) {
@@ -1363,15 +1412,24 @@ function pg_gradeGrammar(doc, html) {
   const bio2Gone = !html.includes(TMPL.bio2);
   if (!bio1Gone || !bio2Gone) {
     const which = (!bio1Gone&&!bio2Gone)?'both paragraphs':(!bio1Gone?'paragraph 1':'paragraph 2');
-    return { score:0, label:'Not Attempted', notes:`About Me ${which} still contain template placeholder text — bio not written.` };
+    return { score:0, label:'Not Attempted',
+      notes:`About Me ${which} still contain template placeholder text — bio not written.`,
+      fix:`Find the About Me section in your HTML (search for <code>class="about-text"</code>). Replace the placeholder text starting with <em>"Write your first paragraph here…"</em> with two paragraphs you've written yourself — describe who you are as an artist, what inspires you, the tools you use, and where you see your work going.` };
   }
+  const grammarFix = [];
   const issues = [];
-  if (html.includes(TMPL.tagline)) issues.push('Hero tagline still at template default');
+  if (html.includes(TMPL.tagline)) {
+    issues.push('Hero tagline still at template default');
+    grammarFix.push(`<strong>Tagline:</strong> Find the hero section (search for the default text <em>"A digital artist passionate about visual storytelling…"</em>) and replace it with a short, personal tagline in your own words.`);
+  }
   const bioRaw   = (html.match(/class="about-text"[\s\S]{0,3000}/)?.[0]||'');
   const bioPlain = bioRaw.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-  if (bioPlain.length>0 && bioPlain.length<150) issues.push(`Bio is very short (~${bioPlain.length} chars) — two substantial paragraphs expected`);
-  if (issues.length===0) return { score:10, label:'Excellent',  notes:'Bio is written and complete. Manual review of spelling/punctuation still recommended.' };
-  return                        { score:7,  label:'Proficient', notes:`Bio present but: ${issues.join('; ')}.` };
+  if (bioPlain.length>0 && bioPlain.length<150) {
+    issues.push(`Bio is very short (~${bioPlain.length} chars) — two substantial paragraphs expected`);
+    grammarFix.push(`<strong>Bio length:</strong> Your About Me section is too short. Expand it to at least two full paragraphs — aim for 150–300 words total. Describe your creative background, influences, the software you use, and your artistic goals.`);
+  }
+  if (issues.length===0) return { score:10, label:'Excellent', notes:'Bio is written and complete. Manual review of spelling/punctuation still recommended.' };
+  return { score:7, label:'Proficient', notes:`Bio present but: ${issues.join('; ')}.`, fix:grammarFix.join('<br>') };
 }
 
 function pg_gradeOriginality(doc, html) {
@@ -1383,9 +1441,10 @@ function pg_gradeOriginality(doc, html) {
     (re.test(html)?stillDefault:customized).push(prop);
   }
   const changed = customized.length;
+  const origFix = `In your <code>&lt;style&gt;</code> block, find <code>:root {</code> near the top. Change the following variable values to your own colors: ${stillDefault.map(p=>`<code>${p}</code>`).join(', ')}. Pick colors that reflect your personal style — use a tool like <a href="https://coolors.co" target="_blank" style="color:#93c5fd">coolors.co</a> to build a palette. After changing them, your whole site will update automatically.`;
   if (stillDefault.length<=1) return { score:10, label:'Excellent',  notes:`${changed}/${total} CSS color variables customized.${stillDefault.length?' Still at default: '+stillDefault[0]+'.':' All core colors original.'}` };
-  if (stillDefault.length<=4) return { score:7,  label:'Proficient', notes:`${changed}/${total} variables changed. Still at defaults: ${stillDefault.join(', ')}.` };
-  return                              { score:4,  label:'Developing', notes:`Only ${changed}/${total} variables changed. Still at defaults: ${stillDefault.join(', ')}.` };
+  if (stillDefault.length<=4) return { score:7,  label:'Proficient', notes:`${changed}/${total} variables changed. Still at defaults: ${stillDefault.join(', ')}.`, fix:origFix };
+  return                              { score:4,  label:'Developing', notes:`Only ${changed}/${total} variables changed. Still at defaults: ${stillDefault.join(', ')}.`, fix:origFix };
 }
 
 function pg_gradeColorConsistency(doc, html) {
@@ -1398,14 +1457,17 @@ function pg_gradeColorConsistency(doc, html) {
   const changed = customized.length, total = Object.keys(DEFS).length;
   const accentCount = (html.match(/var\(--accent\)/g)||[]).length;
   const usesAccent  = accentCount >= 5;
-  if (changed>=3 && usesAccent) return { score:10, label:'Excellent',  notes:`${changed}/${total} core color vars customized; --accent referenced ${accentCount} times.` };
+  if (changed>=3 && usesAccent) return { score:10, label:'Excellent', notes:`${changed}/${total} core color vars customized; --accent referenced ${accentCount} times.` };
+  const colorFix = [];
+  if (stillDefault.length) colorFix.push(`<strong>Update these variables</strong> in the <code>:root {}</code> block at the top of your <code>&lt;style&gt;</code> section: ${stillDefault.map(p=>`<code>${p}</code>`).join(', ')}. Replace the default hex values with colors from your palette.`);
+  if (!usesAccent) colorFix.push(`<strong>Use CSS variables consistently:</strong> Your accent color is only referenced ${accentCount} time(s). Search your CSS for any hard-coded hex color values (like <code>#e8c547</code>) and replace them with <code>var(--accent)</code> so your color scheme stays unified across all sections.`);
   if (changed>=1) {
     const why = [];
     if (stillDefault.length) why.push(`still at defaults: ${stillDefault.join(', ')}`);
     if (!usesAccent) why.push(`--accent only used ${accentCount} time(s) — use it consistently`);
-    return { score:7, label:'Proficient', notes:`Partially personalized (${changed}/${total} changed). ${why.join('; ')}.` };
+    return { score:7, label:'Proficient', notes:`Partially personalized (${changed}/${total} changed). ${why.join('; ')}.`, fix:colorFix.join('<br>') };
   }
-  return { score:4, label:'Developing', notes:`All 4 core color variables still at defaults: ${stillDefault.join(', ')}.` };
+  return { score:4, label:'Developing', notes:`All 4 core color variables still at defaults: ${stillDefault.join(', ')}.`, fix:colorFix.join('<br>') };
 }
 
 function pg_gradeFonts(doc, html) {
@@ -1414,9 +1476,11 @@ function pg_gradeFonts(doc, html) {
   const src  = href || html.match(/fonts\.googleapis\.com[^"'<>\s]+/)?.[0] || '';
   const defaultH = /Playfair[+%20]Display/i.test(src) || html.includes('Playfair Display');
   const defaultB = /Inter:/i.test(src) || /family=Inter/i.test(src) || html.includes("'Inter'") || html.includes('"Inter"');
+  const fontFix = `<strong>Step 1:</strong> Go to <a href="https://fonts.google.com" target="_blank" style="color:#93c5fd">fonts.google.com</a> and choose two fonts — one for headings, one for body text. Click "Get font" for each, then "Get embed code." Copy the <code>&lt;link&gt;</code> tag and paste it into your <code>&lt;head&gt;</code>, replacing the existing Google Fonts link.<br><strong>Step 2:</strong> In your <code>:root {}</code> CSS block, update <code>--font-heading: 'YourHeadingFont', serif;</code> and <code>--font-body: 'YourBodyFont', sans-serif;</code> with your new font names.`;
   if (!defaultH && !defaultB) return { score:10, label:'Excellent',  notes:'Both heading and body fonts fully customized.' };
-  if (defaultH && defaultB)   return { score:4,  label:'Developing', notes:'Default fonts (Playfair Display + Inter) unchanged. A custom Google Fonts pair is required.' };
-  return                              { score:7,  label:'Proficient', notes:'One font changed; both heading and body fonts should use a custom pair.' };
+  if (defaultH && defaultB)   return { score:4,  label:'Developing', notes:'Default fonts (Playfair Display + Inter) unchanged. A custom Google Fonts pair is required.', fix:fontFix };
+  const which = defaultH ? '<strong>Heading font</strong> (Playfair Display) is still the default' : '<strong>Body font</strong> (Inter) is still the default';
+  return { score:7, label:'Proficient', notes:`One font changed; both must be updated. ${which}.`, fix:fontFix };
 }
 
 function pg_gradeParticles(doc, html) {
@@ -1426,13 +1490,15 @@ function pg_gradeParticles(doc, html) {
   const style = styleM ? styleM[1] : 'stars';
   const color = colorM ? colorM[1] : '#e8c547';
   const count = countM ? parseInt(countM[1]) : 120;
-  if (!( style==='stars') && !(color==='#e8c547')) return { score:10, label:'Excellent',  notes:`Style "${style}", color ${color}${count!==120?', count '+count:''}.` };
-  if (style==='stars' && color==='#e8c547' && count===120) return { score:4, label:'Developing', notes:'Particles at full defaults (stars, #e8c547, 120). Customization required.' };
-  const changes = [];
-  if (style!=='stars')   changes.push(`style: "${style}"`);
-  if (color!=='#e8c547') changes.push(`color: ${color}`);
-  if (count!==120)       changes.push(`count: ${count}`);
-  return { score:7, label:'Proficient', notes:`Partial customization: ${changes.join(', ')}. Customize both style and color for full marks.` };
+  const particleFix = `Scroll to the bottom of your HTML file and find the <code>&lt;script&gt;</code> block with particle settings. Change:<br>
+    • <code>const particleStyle = '${style}'</code> → pick a different preset: <code>sparkles</code>, <code>snow</code>, <code>confetti</code>, <code>bubbles</code>, or <code>fireflies</code><br>
+    • <code>const particleColor = '${color}'</code> → change to a hex color that matches your design (e.g. <code>'#ffffff'</code> or <code>'#ff6b6b'</code>)`;
+  if (style!=='stars' && color!=='#e8c547') return { score:10, label:'Excellent', notes:`Style "${style}", color ${color}${count!==120?', count '+count:''}.` };
+  if (style==='stars' && color==='#e8c547' && count===120) return { score:4, label:'Developing', notes:'Particles at full defaults (stars, #e8c547, 120). Both style and color must be changed.', fix:particleFix };
+  const remaining = [];
+  if (style==='stars')   remaining.push(`<code>particleStyle</code> is still <code>'stars'</code>`);
+  if (color==='#e8c547') remaining.push(`<code>particleColor</code> is still <code>'#e8c547'</code>`);
+  return { score:7, label:'Proficient', notes:`Partially customized but ${remaining.join(' and ')} — change both for full marks.`, fix:particleFix };
 }
 
 function pg_gradePublished(html) {
@@ -1456,9 +1522,19 @@ function pg_gradeFeatures(doc, html) {
   if (doc.querySelectorAll('.ba-tab').length===0)                               issues.push('No Before/After projects');
   if (!doc.querySelector('nav'))                                                issues.push('Nav bar missing');
   if (!html.toLowerCase().includes('swiper'))                                   issues.push('Swiper.js not detected');
-  if (issues.length===0) return { score:10, label:'Excellent',  notes:'All required interactive features and elements detected.' };
-  if (issues.length<=2)  return { score:7,  label:'Proficient', notes:`Minor issues: ${issues.join('; ')}.` };
-  return                        { score:4,  label:'Developing', notes:`Multiple issues: ${issues.join('; ')}.` };
+  if (issues.length===0) return { score:10, label:'Excellent', notes:'All required interactive features and elements detected.' };
+  const featureFixes = issues.map(issue => {
+    if (issue.includes('Lightbox'))          return `<strong>Lightbox:</strong> Make sure your HTML contains a <code>&lt;div id="lightbox"&gt;</code> element — it should be present in the template but may have been accidentally deleted.`;
+    if (issue.includes('Landscape gallery')) return `<strong>Landscape gallery:</strong> The section with <code>id="gallery-landscape"</code> appears to have no slides. Check that this section exists and contains <code>.swiper-slide</code> elements with images.`;
+    if (issue.includes('Portrait gallery'))  return `<strong>Portrait gallery:</strong> The section with <code>id="gallery-portrait"</code> appears to have no slides. Add your portrait images as <code>.swiper-slide</code> divs inside this section.`;
+    if (issue.includes('Before/After wrapper')) return `<strong>Before/After section:</strong> The <code>.ba-wrapper</code> element is missing. This section may have been accidentally deleted — check your HTML for the Before/After comparison area.`;
+    if (issue.includes('Before/After project')) return `<strong>Before/After projects:</strong> No <code>.ba-tab</code> elements were found. Each project needs a tab button with <code>class="ba-tab"</code>.`;
+    if (issue.includes('Nav bar'))           return `<strong>Navigation:</strong> A <code>&lt;nav&gt;</code> element is missing. The navigation bar may have been accidentally deleted from the top of the page.`;
+    if (issue.includes('Swiper'))            return `<strong>Swiper.js:</strong> The Swiper library is not detected. Make sure both the CSS link and JS script tag for Swiper are present in your <code>&lt;head&gt;</code> and before <code>&lt;/body&gt;</code>.`;
+    return `<strong>${issue}:</strong> Check that this element/feature is present in your HTML.`;
+  });
+  if (issues.length<=2) return { score:7, label:'Proficient', notes:`Minor issues: ${issues.join('; ')}.`, fix:featureFixes.join('<br>') };
+  return                       { score:4, label:'Developing', notes:`Multiple issues: ${issues.join('; ')}.`, fix:featureFixes.join('<br>') };
 }
 
 function runPreGrade(html) {
@@ -1509,10 +1585,15 @@ function buildPreGradeHTML(pg, cardId) {
       const scoreVal = s?.score ?? null;
       const noteText = s?.notes || '';
       const labelText = s?.label || '';
-      // Show rubric requirement whenever score < 10 (or is null)
-      const showReq = (scoreVal === null || scoreVal < 10) && c.rubricReq;
-      const reqHtml = showReq
+      const notFull = scoreVal === null || scoreVal < 10;
+      // Rubric requirement shown when not full marks
+      const reqHtml = notFull && c.rubricReq
         ? `<div class="pregrade-rubric-req"><strong>Rubric requires:</strong> ${escHtml(c.rubricReq)}</div>`
+        : '';
+      // Student-facing fix instructions — only when score < 10 and fix text exists
+      const fixText = s?.fix || '';
+      const fixHtml = (scoreVal !== null && scoreVal < 10 && fixText)
+        ? `<div class="pregrade-fix">✏️ <strong>How to fix:</strong> ${fixText}</div>`
         : '';
       return `
         <div class="pregrade-row">
@@ -1524,6 +1605,7 @@ function buildPreGradeHTML(pg, cardId) {
           <div class="pregrade-note">
             <strong>${escHtml(labelText)}</strong>${noteText ? ' — ' + noteText : ''}
             ${reqHtml}
+            ${fixHtml}
           </div>
         </div>
       `;
