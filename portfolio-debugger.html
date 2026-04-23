@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Debugger</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --text: #e8eaf0;
+    --text-muted: #7a7f9a;
+    --red: #ff4d6d;
+    --yellow: #ffd166;
+    --green: #06d6a0;
+    --blue: #4cc9f0;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 20px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+  header p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    max-width: 680px;
+    margin: 0 auto 32px;
+    position: relative;
+  }
+  .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.08);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 3rem; margin-bottom: 14px; }
+  .drop-zone h2 { font-size: 1.2rem; margin-bottom: 8px; color: var(--text); }
+  .drop-zone p { color: var(--text-muted); font-size: 0.88rem; }
+
+  #results { max-width: 860px; margin: 0 auto; display: none; }
+
+  .file-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .file-banner .file-icon { font-size: 1.6rem; }
+  .file-banner .file-name { font-weight: 600; font-size: 1.05rem; }
+  .file-banner .file-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+
+  .summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat .num { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .stat .label { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat.critical .num { color: var(--red); }
+  .stat.warning .num { color: var(--yellow); }
+  .stat.fixed .num { color: var(--green); }
+
+  .section-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    padding-left: 2px;
+  }
+
+  .bug-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+
+  .bug-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .bug-card.critical { border-left-color: var(--red); }
+  .bug-card.warning  { border-left-color: var(--yellow); }
+  .bug-card.info     { border-left-color: var(--blue); }
+
+  .bug-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .bug-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .critical .bug-badge { background: rgba(255,77,109,0.15); color: var(--red); }
+  .warning  .bug-badge { background: rgba(255,209,102,0.15); color: var(--yellow); }
+  .info     .bug-badge { background: rgba(76,201,240,0.15); color: var(--blue); }
+
+  .bug-title { font-weight: 600; font-size: 0.97rem; line-height: 1.3; }
+  .bug-desc  { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px; }
+
+  .bug-detail {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: #a8b2d8;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 6px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .clean-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--green);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    color: var(--green);
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+  .clean-card p { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; font-weight: 400; }
+
+  .action-bar {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    margin-top: 4px;
+  }
+
+  button {
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button:hover { opacity: 0.85; transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+
+  .btn-fix {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    padding: 14px 32px;
+    font-size: 1rem;
+  }
+  .btn-download {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-reset {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .fix-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .fix-log h3 { font-size: 0.9rem; margin-bottom: 10px; color: var(--accent2); }
+  .fix-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    line-height: 1.4;
+  }
+  .fix-item .check { color: var(--green); font-size: 1rem; flex-shrink: 0; }
+
+  .known-bugs-section {
+    max-width: 860px;
+    margin: 0 auto 32px;
+  }
+  .known-bugs-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .known-bugs-section summary {
+    padding: 14px 18px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .known-bugs-section summary::-webkit-details-marker { display: none; }
+  .known-bugs-section details[open] summary { border-bottom: 1px solid var(--border); }
+  .known-bugs-section .bug-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    padding: 14px;
+  }
+  .known-bug-item {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+  .known-bug-item .kb-title { font-weight: 600; margin-bottom: 2px; }
+  .known-bug-item .kb-desc { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛠 Portfolio Debugger</h1>
+  <p>Drop a student portfolio HTML file to scan for bugs and auto-fix them</p>
+</header>
+
+<!-- Drop Zone -->
+<div class="drop-zone" id="dropZone">
+  <input type="file" id="fileInput" accept=".html,.htm">
+  <div class="drop-icon">📂</div>
+  <h2>Drop HTML file here</h2>
+  <p>or click to browse &nbsp;·&nbsp; .html files only</p>
+</div>
+
+<!-- Known Bugs Reference -->
+<div class="known-bugs-section">
+  <details>
+    <summary>📋 What bugs does this scanner check for?  ▾</summary>
+    <div class="bug-grid">
+      <div class="known-bug-item"><div class="kb-title">Orphaned second HTML doc</div><div class="kb-desc">Extra &lt;!doctype html&gt; appended after closing &lt;/html&gt;</div></div>
+      <div class="known-bug-item"><div class="kb-title">Lightbox deduplication</div><div class="kb-desc">Slides sharing data-title + data-category collapse in lightbox</div></div>
+      <div class="known-bug-item"><div class="kb-title">Contact email placeholder</div><div class="kb-desc">href still points to youremail@school.edu</div></div>
+      <div class="known-bug-item"><div class="kb-title">Missing mailto: prefix</div><div class="kb-desc">Contact link has email address but no mailto: scheme</div></div>
+      <div class="known-bug-item"><div class="kb-title">baProjects key casing</div><div class="kb-desc">Before/After capitalized instead of before/after</div></div>
+      <div class="known-bug-item"><div class="kb-title">CSS class inside :root</div><div class="kb-desc">Class selector nested inside :root {} breaks all CSS vars</div></div>
+      <div class="known-bug-item"><div class="kb-title">Missing Swiper/AOS CSS</div><div class="kb-desc">JS libraries loaded but companion stylesheet links absent</div></div>
+      <div class="known-bug-item"><div class="kb-title">Missing gallery ratio</div><div class="kb-desc">--gallery-ratio-landscape not declared in :root</div></div>
+      <div class="known-bug-item"><div class="kb-title">Hardcoded lightbox img src</div><div class="kb-desc">lb-img has a hardcoded src instead of empty ""</div></div>
+      <div class="known-bug-item"><div class="kb-title">Leading space in image path</div><div class="kb-desc">src="images/ filename.jpg" causes broken image</div></div>
+      <div class="known-bug-item"><div class="kb-title">studentID / studentPeriod unfilled</div><div class="kb-desc">Placeholder values left in student info constants</div></div>
+      <div class="known-bug-item"><div class="kb-title">Unloaded Google Font</div><div class="kb-desc">Font used in CSS but not imported via &lt;link&gt;</div></div>
+    </div>
+  </details>
+</div>
+
+<!-- Results (hidden until file loaded) -->
+<div id="results">
+  <div class="file-banner" id="fileBanner">
+    <div class="file-icon">📄</div>
+    <div>
+      <div class="file-name" id="fileName">—</div>
+      <div class="file-meta" id="fileMeta">—</div>
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="stat critical"><div class="num" id="statCritical">0</div><div class="label">Critical</div></div>
+    <div class="stat warning"><div class="num" id="statWarning">0</div><div class="label">Warnings</div></div>
+    <div class="stat"><div class="num" id="statInfo" style="color:var(--blue)">0</div><div class="label">Info</div></div>
+    <div class="stat fixed"><div class="num" id="statFixed">—</div><div class="label">Auto-fixable</div></div>
+  </div>
+
+  <!-- Action bar sits RIGHT below stats, always visible -->
+  <div class="action-bar" id="actionBar"></div>
+
+  <div class="fix-log" id="fixLog">
+    <h3>✅ Fixes Applied</h3>
+    <div id="fixLogItems"></div>
+  </div>
+
+  <div class="section-title" id="bugSectionTitle">Issues Found</div>
+  <div class="bug-list" id="bugList"></div>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let originalContent = '';
+let fixedContent    = '';
+let originalName    = '';
+let bugs            = [];
+
+// ─── Drop Zone ───────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) processFile(fileInput.files[0]);
+});
+
+function processFile(file) {
+  if (!file.name.match(/\.html?$/i)) { alert('Please drop an .html file.'); return; }
+  originalName = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    originalContent = e.target.result;
+    runDiagnostics();
+  };
+  reader.readAsText(file);
+}
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
+function runDiagnostics() {
+  bugs = [];
+  const c = originalContent;
+
+  // ── 1. Orphaned second HTML document ──────────────────────────────────────
+  const firstClose = c.indexOf('</html>');
+  if (firstClose !== -1) {
+    const after = c.slice(firstClose + 7).trim();
+    if (after.length > 0) {
+      bugs.push({
+        id: 'second-html',
+        severity: 'critical',
+        title: 'Orphaned second HTML document',
+        desc: 'Content was found after the closing </html> tag. This is usually an empty HTML boilerplate accidentally pasted at the end.',
+        detail: after.slice(0, 300),
+        fixable: true,
+        fix: content => {
+          const idx = content.indexOf('</html>');
+          return content.slice(0, idx + 7) + '\n';
+        },
+        fixMsg: 'Removed orphaned HTML document appended after </html>'
+      });
+    }
+  }
+
+  // ── 2. Lightbox deduplication (portrait gallery) ──────────────────────────
+  checkLightboxDups(c, 'gallery-portrait', 'portrait');
+  checkLightboxDups(c, 'gallery-landscape', 'landscape');
+
+  // ── 3. Contact email placeholder ──────────────────────────────────────────
+  if (/href="mailto:youremail@school\.edu"/i.test(c)) {
+    // Try to extract what the student put as display text
+    const m = c.match(/href="mailto:youremail@school\.edu"[^>]*>([^<]+)</);
+    const displayEmail = m ? m[1].trim() : null;
+    const looksLikeEmail = displayEmail && /@/.test(displayEmail) && !/youremail/.test(displayEmail);
+    bugs.push({
+      id: 'email-placeholder',
+      severity: 'critical',
+      title: 'Contact email href is a placeholder',
+      desc: 'The mailto: link still points to youremail@school.edu.' +
+            (looksLikeEmail ? ` The display text shows "${displayEmail}" — auto-fix will use that.` : ' The display text was also not updated.'),
+      detail: `href="mailto:youremail@school.edu"`,
+      fixable: true,
+      fix: content => {
+        if (looksLikeEmail) {
+          return content.replace(/href="mailto:youremail@school\.edu"/gi, `href="mailto:${displayEmail}"`);
+        }
+        // Can't auto-fix without knowing the real email — flag only
+        return content;
+      },
+      fixMsg: looksLikeEmail
+        ? `Fixed contact href → mailto:${displayEmail}`
+        : 'Could not auto-fix contact email — student must update href manually'
+    });
+  }
+
+  // ── 4. Missing mailto: prefix ─────────────────────────────────────────────
+  const noMailto = c.match(/href="([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})"/g);
+  if (noMailto) {
+    bugs.push({
+      id: 'no-mailto',
+      severity: 'critical',
+      title: 'Contact link missing mailto: prefix',
+      desc: 'An email address was used directly as an href without the mailto: scheme. The link will fail in browsers.',
+      detail: noMailto.join('\n'),
+      fixable: true,
+      fix: content => content.replace(/href="([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})"/g, 'href="mailto:$1"'),
+      fixMsg: `Added missing mailto: prefix to ${noMailto.length} contact link(s)`
+    });
+  }
+
+  // ── 5. baProjects key casing ──────────────────────────────────────────────
+  if (/baProjects\s*=/.test(c)) {
+    const baSection = c.slice(c.indexOf('baProjects'));
+    const hasBadCase = /\b(Before|After)\s*:/.test(baSection.slice(0, 2000));
+    if (hasBadCase) {
+      bugs.push({
+        id: 'ba-casing',
+        severity: 'critical',
+        title: 'baProjects uses Before/After (capitalized)',
+        desc: 'The buildBA() function reads p.before and p.after (lowercase). Capitalized keys will cause all before/after images to be undefined.',
+        detail: baSection.match(/\b(Before|After)\s*:.+/g)?.join('\n') || '',
+        fixable: true,
+        fix: content => {
+          // Only fix inside baProjects array
+          const start = content.indexOf('baProjects');
+          const end = content.indexOf('];', start);
+          if (start === -1 || end === -1) return content;
+          const before = content.slice(0, start);
+          let middle = content.slice(start, end + 2);
+          middle = middle.replace(/\bBefore\s*:/g, 'before:').replace(/\bAfter\s*:/g, 'after:');
+          const after = content.slice(end + 2);
+          return before + middle + after;
+        },
+        fixMsg: 'Fixed baProjects keys: Before→before, After→after'
+      });
+    }
+  }
+
+  // ── 6. CSS class inside :root ─────────────────────────────────────────────
+  const rootMatch = c.match(/:root\s*\{([^}]+)\}/);
+  if (rootMatch) {
+    const rootBody = rootMatch[1];
+    if (/\.\w+\s*\{/.test(rootBody)) {
+      bugs.push({
+        id: 'class-in-root',
+        severity: 'critical',
+        title: 'CSS class selector inside :root {}',
+        desc: 'A class definition was placed inside the :root {} block. This is invalid CSS and breaks all CSS custom property (var()) references on the page.',
+        detail: rootBody.trim().slice(0, 400),
+        fixable: false,
+        fixMsg: null
+      });
+    }
+  }
+
+  // ── 7. Missing Swiper CSS ─────────────────────────────────────────────────
+  const hasSwiperJS = /swiper[^"']*\.js/i.test(c);
+  const hasSwiperCSS = /swiper[^"']*\.css/i.test(c);
+  if (hasSwiperJS && !hasSwiperCSS) {
+    bugs.push({
+      id: 'swiper-css',
+      severity: 'critical',
+      title: 'Swiper CSS stylesheet not loaded',
+      desc: 'Swiper.js script is present but the companion CSS link is missing. The carousel will have no layout or styling.',
+      detail: 'Missing: <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">',
+      fixable: true,
+      fix: content => {
+        if (/swiper[^"']*\.css/i.test(content)) return content;
+        const insertAfter = '</title>';
+        const idx = content.indexOf(insertAfter);
+        if (idx === -1) return content;
+        const cssLink = '\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">';
+        return content.slice(0, idx + insertAfter.length) + cssLink + content.slice(idx + insertAfter.length);
+      },
+      fixMsg: 'Added missing Swiper CSS <link> to <head>'
+    });
+  }
+
+  // ── 8. Missing AOS CSS ───────────────────────────────────────────────────
+  const hasAosJS = /aos[^"']*\.js/i.test(c);
+  const hasAosCSS = /aos[^"']*\.css/i.test(c);
+  if (hasAosJS && !hasAosCSS) {
+    bugs.push({
+      id: 'aos-css',
+      severity: 'warning',
+      title: 'AOS (Animate on Scroll) CSS not loaded',
+      desc: 'AOS.js is present but the companion stylesheet is missing. Scroll animations will have broken initial states.',
+      detail: 'Missing: <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">',
+      fixable: true,
+      fix: content => {
+        if (/aos[^"']*\.css/i.test(content)) return content;
+        const insertAfter = '</title>';
+        const idx = content.indexOf(insertAfter);
+        if (idx === -1) return content;
+        const cssLink = '\n  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">';
+        return content.slice(0, idx + insertAfter.length) + cssLink + content.slice(idx + insertAfter.length);
+      },
+      fixMsg: 'Added missing AOS CSS <link> to <head>'
+    });
+  }
+
+  // ── 9. Missing --gallery-ratio-landscape ─────────────────────────────────
+  if (/gallery-landscape/i.test(c) && !c.includes('--gallery-ratio-landscape')) {
+    bugs.push({
+      id: 'gallery-ratio',
+      severity: 'warning',
+      title: 'Missing --gallery-ratio-landscape CSS variable',
+      desc: 'The landscape gallery is present but --gallery-ratio-landscape is not declared in :root. The gallery may render with incorrect proportions.',
+      detail: '--gallery-ratio-landscape: 16/9;  /* should be in :root {} */',
+      fixable: false,
+      fixMsg: null
+    });
+  }
+
+  // ── 10. Hardcoded lightbox img src ────────────────────────────────────────
+  const lbImgHard = c.match(/id="lb-img"\s+src="([^"]+)"/);
+  if (lbImgHard && lbImgHard[1] !== '') {
+    bugs.push({
+      id: 'lb-img-src',
+      severity: 'warning',
+      title: 'Lightbox <img> has a hardcoded src',
+      desc: 'The lightbox image element (id="lb-img") has a hardcoded src value. It should start empty so JavaScript can populate it dynamically.',
+      detail: `Found: src="${lbImgHard[1]}"`,
+      fixable: true,
+      fix: content => content.replace(/(<img\s[^>]*id="lb-img"[^>]*)\bsrc="[^"]*"/, '$1src=""'),
+      fixMsg: 'Cleared hardcoded src="" on lb-img element'
+    });
+  }
+
+  // ── 11. Leading space in image src paths ─────────────────────────────────
+  const leadingSpaces = c.match(/src="[^"]*\/\s+[^"]+"/g);
+  if (leadingSpaces) {
+    bugs.push({
+      id: 'leading-space',
+      severity: 'warning',
+      title: `Leading space in image path${leadingSpaces.length > 1 ? 's' : ''}`,
+      desc: `${leadingSpaces.length} image src attribute${leadingSpaces.length > 1 ? 's' : ''} ha${leadingSpaces.length > 1 ? 've' : 's'} a leading space after the folder separator, causing broken images.`,
+      detail: leadingSpaces.join('\n'),
+      fixable: true,
+      fix: content => content.replace(/src="([^"]*\/)\s+([^"]+)"/g, 'src="$1$2"'),
+      fixMsg: `Fixed leading space in ${leadingSpaces.length} image path(s)`
+    });
+  }
+
+  // ── 12. studentID / studentPeriod unfilled ───────────────────────────────
+  const idUnfilled     = /studentID\s*=\s*["']your[- ]?id["']/i.test(c) || /studentID\s*=\s*["']['"]/.test(c) || /studentID\s*=\s*["']0+["']/.test(c);
+  const periodUnfilled = /studentPeriod\s*=\s*["'][0-9]?["']/i.test(c) || /studentPeriod\s*=\s*["']['"]/.test(c);
+  if (idUnfilled || periodUnfilled) {
+    bugs.push({
+      id: 'student-info',
+      severity: 'info',
+      title: 'Student ID or Period may be unfilled',
+      desc: 'The studentID or studentPeriod constants appear to contain placeholder or empty values.',
+      detail: (c.match(/const\s+student(?:ID|Period)\s*=.+/g) || []).join('\n'),
+      fixable: false,
+      fixMsg: null
+    });
+  }
+
+  // ── 13. Google Font mismatch ──────────────────────────────────────────────
+  const fontHeadingMatch = c.match(/--font-heading\s*:\s*["']([^"']+)["']/);
+  if (fontHeadingMatch) {
+    const declaredFont = fontHeadingMatch[1];
+    // Check if it's loaded in a Google Fonts link
+    const googleFontsLinks = c.match(/fonts\.googleapis\.com\/css[^"']*/g) || [];
+    const fontInLink = googleFontsLinks.some(link => {
+      const decoded = decodeURIComponent(link).toLowerCase();
+      return decoded.includes(declaredFont.toLowerCase().split(',')[0].trim());
+    });
+    if (!fontInLink && googleFontsLinks.length > 0) {
+      bugs.push({
+        id: 'font-mismatch',
+        severity: 'warning',
+        title: 'Heading font may not be loaded from Google Fonts',
+        desc: `--font-heading is set to "${declaredFont}" but this font name wasn't found in any Google Fonts <link>. Text may fall back to a default font.`,
+        detail: `Declared: ${declaredFont}\nLoaded via: ${googleFontsLinks[0].slice(0, 120)}`,
+        fixable: false,
+        fixMsg: null
+      });
+    }
+  }
+
+  renderResults();
+}
+
+// ─── Lightbox Duplicate Checker ───────────────────────────────────────────────
+function checkLightboxDups(c, galleryId, label) {
+  const galleryStart = c.indexOf(`id="${galleryId}"`);
+  if (galleryStart === -1) return;
+
+  // Find gallery end by looking for closing wrapper pattern
+  let depth = 0;
+  let i = galleryStart;
+  let galleryEnd = -1;
+  while (i < c.length) {
+    const open = c.indexOf('<div', i);
+    const close = c.indexOf('</div>', i);
+    if (open === -1 && close === -1) break;
+    if (open !== -1 && (close === -1 || open < close)) {
+      depth++;
+      i = open + 4;
+    } else {
+      depth--;
+      i = close + 6;
+      if (depth <= 0) { galleryEnd = i; break; }
+    }
+  }
+
+  const section = galleryEnd > -1 ? c.slice(galleryStart, galleryEnd) : c.slice(galleryStart, galleryStart + 20000);
+  const slideRe = /data-title="([^"]*)"[^>]*data-category="([^"]*)"|data-category="([^"]*)"[^>]*data-title="([^"]*)"/g;
+  const seen = {};
+  const dupes = [];
+  let m;
+  let slideNum = 0;
+
+  // Also check by parsing slides sequentially
+  const slideBlocks = section.split('class="swiper-slide"');
+  slideBlocks.shift(); // remove before first slide
+
+  for (const block of slideBlocks) {
+    slideNum++;
+    const titleM = block.match(/data-title="([^"]*)"/);
+    const catM   = block.match(/data-category="([^"]*)"/);
+    if (!titleM || !catM) continue;
+    const key = `${titleM[1]}|${catM[1]}`;
+    if (seen[key]) {
+      dupes.push({ slideNum, title: titleM[1], category: catM[1] });
+    } else {
+      seen[key] = slideNum;
+    }
+  }
+
+  if (dupes.length > 0) {
+    bugs.push({
+      id: `lightbox-dup-${label}`,
+      severity: 'critical',
+      title: `Lightbox hides ${dupes.length} ${label} slide${dupes.length > 1 ? 's' : ''} (duplicate titles)`,
+      desc: `The lightbox deduplicates by data-title + data-category. The following ${label} slides share a title+category with an earlier slide and won't appear in the lightbox.`,
+      detail: dupes.map(d => `Slide ~${d.slideNum}: "${d.title}" / "${d.category}"  → hidden in lightbox`).join('\n'),
+      fixable: true,
+      fix: content => fixLightboxDups(content, galleryId, dupes),
+      fixMsg: `Gave unique data-title to ${dupes.length} ${label} slide(s) hidden by lightbox deduplication`
+    });
+  }
+}
+
+function fixLightboxDups(content, galleryId, dupes) {
+  // Find each duplicate slide by PROJECT comment number and rename its data-title
+  // Strategy: find slides with the duplicate title and rename them sequentially
+  const galleryStart = content.indexOf(`id="${galleryId}"`);
+  if (galleryStart === -1) return content;
+
+  // Work through duplicate entries and give each a unique title
+  let modified = content;
+  const processedKeys = new Set();
+
+  for (const dupe of dupes) {
+    const key = `${dupe.title}|${dupe.category}`;
+    if (processedKeys.has(key)) continue;
+
+    // Find all occurrences of this title+category combo in the gallery section
+    const pattern = new RegExp(`data-title="${escapeRe(dupe.title)}"`, 'g');
+    let matchCount = 0;
+    const gallerySection = modified.slice(galleryStart);
+    let newSection = gallerySection.replace(pattern, (match, offset) => {
+      matchCount++;
+      if (matchCount === 1) return match; // keep first occurrence
+      return `data-title="${dupe.title} ${matchCount}"`;
+    });
+    modified = modified.slice(0, galleryStart) + newSection;
+    processedKeys.add(key);
+  }
+  return modified;
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ─── Render Results ───────────────────────────────────────────────────────────
+function renderResults() {
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('fileName').textContent = originalName;
+
+  const lines = originalContent.split('\n').length;
+  const kb    = (originalContent.length / 1024).toFixed(1);
+  document.getElementById('fileMeta').textContent = `${lines} lines · ${kb} KB`;
+
+  const critical = bugs.filter(b => b.severity === 'critical').length;
+  const warning  = bugs.filter(b => b.severity === 'warning').length;
+  const info     = bugs.filter(b => b.severity === 'info').length;
+  const fixable  = bugs.filter(b => b.fixable).length;
+
+  document.getElementById('statCritical').textContent = critical;
+  document.getElementById('statWarning').textContent  = warning;
+  document.getElementById('statInfo').textContent     = info;
+  document.getElementById('statFixed').textContent    = fixable;
+
+  const bugList = document.getElementById('bugList');
+  bugList.innerHTML = '';
+  document.getElementById('bugSectionTitle').textContent = bugs.length > 0 ? `${bugs.length} Issue${bugs.length !== 1 ? 's' : ''} Found` : '';
+
+  if (bugs.length === 0) {
+    bugList.innerHTML = `<div class="clean-card">✅ No issues detected<p>This file passed all checks. It may still have content issues that require human review.</p></div>`;
+  }
+
+  for (const bug of bugs) {
+    const card = document.createElement('div');
+    card.className = `bug-card ${bug.severity}`;
+    card.innerHTML = `
+      <div class="bug-header">
+        <span class="bug-badge">${bug.severity.toUpperCase()}</span>
+        <span class="bug-title">${bug.title}</span>
+      </div>
+      <div class="bug-desc">${bug.desc}</div>
+      ${bug.detail ? `<div class="bug-detail">${escHtml(bug.detail)}</div>` : ''}
+      <div style="margin-top:8px;font-size:0.78rem;color:${bug.fixable ? 'var(--accent2)' : 'var(--text-muted)'}">
+        ${bug.fixable ? '⚡ Auto-fixable' : '⚠️ Requires manual fix'}
+      </div>`;
+    bugList.appendChild(card);
+  }
+
+  // Action bar
+  const bar = document.getElementById('actionBar');
+  bar.innerHTML = '';
+
+  if (bugs.some(b => b.fixable)) {
+    const btnFix = document.createElement('button');
+    btnFix.className = 'btn-fix';
+    btnFix.textContent = `⚡ Auto-Fix ${bugs.filter(b=>b.fixable).length} Issue${bugs.filter(b=>b.fixable).length!==1?'s':''} & Download`;
+    btnFix.addEventListener('click', applyFixes);
+    bar.appendChild(btnFix);
+  }
+
+  const btnReset = document.createElement('button');
+  btnReset.className = 'btn-reset';
+  btnReset.textContent = '↩ Scan Another File';
+  btnReset.addEventListener('click', () => {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('fixLog').style.display = 'none';
+    fileInput.value = '';
+    bugs = []; originalContent = ''; fixedContent = '';
+  });
+  bar.appendChild(btnReset);
+
+  window.scrollTo({ top: document.getElementById('results').offsetTop - 20, behavior: 'smooth' });
+  // Ensure action bar is visible
+  setTimeout(() => {
+    document.getElementById('actionBar').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+}
+
+// ─── Apply Fixes ──────────────────────────────────────────────────────────────
+function applyFixes() {
+  fixedContent = originalContent;
+  const log = [];
+
+  for (const bug of bugs) {
+    if (!bug.fixable) continue;
+    const before = fixedContent;
+    fixedContent = bug.fix(fixedContent);
+    if (fixedContent !== before) {
+      log.push(bug.fixMsg);
+    }
+  }
+
+  // Show fix log
+  const fixLog = document.getElementById('fixLog');
+  const fixLogItems = document.getElementById('fixLogItems');
+  fixLogItems.innerHTML = '';
+  for (const msg of log) {
+    const item = document.createElement('div');
+    item.className = 'fix-item';
+    item.innerHTML = `<span class="check">✓</span><span>${escHtml(msg)}</span>`;
+    fixLogItems.appendChild(item);
+  }
+  fixLog.style.display = 'block';
+
+  // Download
+  const base  = originalName.replace(/\.html?$/i, '');
+  const fname = `${base}-fixed.html`;
+  const blob  = new Blob([fixedContent], { type: 'text/html' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+
+  // Update action bar to allow re-download
+  const bar = document.getElementById('actionBar');
+  bar.innerHTML = '';
+  const btnDl = document.createElement('button');
+  btnDl.className = 'btn-download';
+  btnDl.textContent = '⬇ Download Fixed File Again';
+  btnDl.addEventListener('click', () => {
+    const b2  = new Blob([fixedContent], { type: 'text/html' });
+    const u2  = URL.createObjectURL(b2);
+    const a2  = document.createElement('a'); a2.href = u2; a2.download = fname; a2.click();
+    URL.revokeObjectURL(u2);
+  });
+  bar.appendChild(btnDl);
+  const btnReset = document.createElement('button');
+  btnReset.className = 'btn-reset';
+  btnReset.textContent = '↩ Scan Another File';
+  btnReset.addEventListener('click', () => {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('fixLog').style.display = 'none';
+    fileInput.value = '';
+    bugs = []; originalContent = ''; fixedContent = '';
+  });
+  bar.appendChild(btnReset);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
